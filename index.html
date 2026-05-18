@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Quiz interativo sobre a carreira de Engenharia de Software — dia a dia, salários, formação e tecnologias.">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>Hacker Quiz - Engenharia de Software</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%230a0a0a' width='32' height='32'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='18' fill='%2300ff41' text-anchor='middle'%3E%26gt;%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    // Fallback caso Tone.js falhe ao carregar
+    window.addEventListener('error', function(e) {
+      if (e.target && e.target.src && e.target.src.includes('tone')) {
+        console.warn('Tone.js não pôde ser carregado. O jogo funcionará sem áudio.');
+        window.Tone = undefined;
+      }
+    }, true);
+  </script>
+</head>
+<body>
+  <button id="btn-mute" class="btn-mute" type="button" aria-label="Mutar música">
+    <span id="mute-icon" aria-hidden="true">🔊</span>
+    <span class="sr-only" id="mute-label">Som ligado</span>
+  </button>
+  
+  <div class="matrix-bg"></div>
+
+  <div id="transition-overlay" class="transition-overlay" hidden aria-hidden="true">
+    <div class="transition-terminal">
+      <p id="transition-title" class="transition-title">// SYNC IN PROGRESS</p>
+      <div id="transition-log" class="transition-log"></div>
+      <div class="transition-progress">
+        <div id="transition-progress-fill" class="transition-progress-fill"></div>
+      </div>
+    </div>
+  </div>
+  
+  <main class="container">
+    <!-- Tela Inicial -->
+    <section id="tela-inicial" class="tela ativa">
+      <!-- Logo com máscara -->
+      <div class="logo-container">
+        <div class="mask-mini">
+          <svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path class="mask-line" d="M50 5 C30 5 10 20 8 45 C5 70 20 95 50 115 C80 95 95 70 92 45 C90 20 70 5 50 5Z"/>
+            <path class="mask-fill" d="M50 12 C35 12 18 28 16 50 C15 65 28 85 50 105 C72 85 85 65 84 50 C82 28 65 12 50 12Z"/>
+            <ellipse class="mask-eye-mini" cx="32" cy="52" rx="10" ry="7"/>
+            <ellipse class="mask-eye-mini" cx="68" cy="52" rx="10" ry="7"/>
+            <path class="mask-stache" d="M50 78 Q40 75 30 80 Q25 82 22 78 Q32 85 50 82 Q68 85 78 78 Q75 82 70 80 Q60 75 50 78Z"/>
+          </svg>
+        </div>
+        <div class="logo">
+          <span class="glitch" data-text="HACKER QUIZ">HACKER QUIZ</span>
+        </div>
+        <p class="tagline">// Engenharia de Software Edition</p>
+      </div>
+
+      <p class="subtitulo">Teste seus conhecimentos na carreira tech</p>
+
+      <!-- Terminal com infos do jogo -->
+      <div class="terminal-info">
+        <div class="terminal-header-mini">
+          <span class="term-dot red"></span>
+          <span class="term-dot yellow"></span>
+          <span class="term-dot green"></span>
+          <span class="term-title">root@anonymous:~</span>
+        </div>
+        <div class="terminal-body-mini">
+          <div class="term-line"><span class="term-prompt">$</span> cat game_info.txt</div>
+          <div class="term-output">> 10 perguntas aleatórias</div>
+          <div class="term-output">> Níveis: Junior → Pleno → Senior</div>
+          <div class="term-output">> Tema: Dark Web / Anonymous</div>
+          <div class="term-line blink"><span class="term-cursor">_</span></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btn-iniciar" class="btn-principal">INICIAR INVASAO</button>
+        <button id="btn-podium" class="btn-secundario">VER PODIUM</button>
+      </div>
+    </section>
+
+    <!-- Tela do Quiz -->
+    <section id="tela-quiz" class="tela">
+      <div class="header-quiz">
+        <div class="header-quiz-meta">
+          <div class="progresso">
+            <span id="num-pergunta">01</span>/<span id="total-perguntas">10</span>
+          </div>
+          <div class="pontuacao">
+            SCORE: <span id="score-atual">0000</span>
+          </div>
+        </div>
+        <button type="button" id="btn-desistir" class="btn-secundario btn-desistir" aria-label="Desistir da partida atual">
+          DESISTIR
+        </button>
+      </div>
+      
+      <!-- Barra de progresso animada -->
+      <div class="progresso-bar">
+        <div class="progresso-fill" id="barra-progresso" style="width: 0%"></div>
+      </div>
+      
+      <div class="card-pergunta">
+        <div class="categoria" id="categoria-pergunta">GIT</div>
+        <h2 id="texto-pergunta">Carregando...</h2>
+      </div>
+
+      <div class="alternativas" id="container-alternativas">
+        <!-- Alternativas serão inseridas via JS -->
+      </div>
+
+      <div class="feedback" id="feedback" role="status" aria-live="polite" aria-atomic="true"></div>
+
+      <button id="btn-confirmar" class="btn-principal" disabled>CONFIRMAR</button>
+      <button id="btn-proxima" class="btn-principal oculto">PROXIMA ></button>
+    </section>
+
+    <!-- Tela de Resultado -->
+    <section id="tela-resultado" class="tela">
+      <div class="resultado-header">
+        <p id="resultado-rank" class="resultado-rank">OPERADOR</p>
+        <h2 id="resultado-titulo">MISSAO CONCLUIDA</h2>
+        <p id="resultado-subtitulo" class="resultado-subtitulo"></p>
+        <div class="score-final">
+          <span id="pontuacao-final">0</span>
+          <small>pontos</small>
+        </div>
+      </div>
+
+      <div class="estatisticas resultado-stats">
+        <div class="stat">
+          <span id="acertos">0</span>
+          <label>ACERTOS</label>
+        </div>
+        <div class="stat">
+          <span id="tempo">0s</span>
+          <label>TEMPO</label>
+        </div>
+      </div>
+
+      <div class="input-nome">
+        <label for="nome-jogador">DIGITE SEU CODINOME:</label>
+        <input type="text" id="nome-jogador" maxlength="20" placeholder="Hacker_001">
+      </div>
+
+      <button id="btn-salvar" class="btn-principal">SALVAR NO PODIUM</button>
+      <button id="btn-jogar-novamente" class="btn-secundario">JOGAR NOVAMENTE</button>
+    </section>
+
+    <!-- Tela do Pódio -->
+    <section id="tela-podium" class="tela">
+      <h2 class="titulo-podium">// PÓDIO DOS HACKERS</h2>
+      <div class="podium-container" id="lista-podium">
+        <!-- Lista será preenchida via JS -->
+      </div>
+      <button id="btn-voltar" class="btn-secundario"><< VOLTAR</button>
+    </section>
+  </main>
+
+  <footer class="terminal-footer">
+    <span class="cursor">_</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

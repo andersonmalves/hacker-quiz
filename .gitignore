@@ -1,0 +1,14 @@
+# Configuração local do Cursor (não faz parte do jogo publicado)
+.cursor/
+AGENTS.md
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Editores
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
