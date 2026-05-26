@@ -8,6 +8,7 @@ const FEATURES = {
 
 const CAMPANHA_CONFIG = {
   storageKey: 'cyberMazeProgresso',
+  progressoVersao: 2,
   tempoInicialSegundos: 900,
   penalidadeErroSegundos: 15,
   atencaoInicial: 100,
@@ -35,6 +36,22 @@ const BASE_TILEMAP = {
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ]
 };
+
+const espelharTilemap = (tilemap) => ({
+  cols: tilemap.cols,
+  rows: tilemap.rows,
+  tileSize: tilemap.tileSize,
+  grid: tilemap.grid.map((row) => [...row].reverse())
+});
+
+const BASE_TILEMAP_MIRROR = espelharTilemap(BASE_TILEMAP);
+
+const TILEMAPS = {
+  base: BASE_TILEMAP,
+  'base-mirror': BASE_TILEMAP_MIRROR
+};
+
+const getTilemap = (ref) => TILEMAPS[ref] || BASE_TILEMAP;
 
 const FASES_CAMPANHA = [
   {
@@ -67,10 +84,24 @@ const FASES_CAMPANHA = [
   {
     id: 4,
     titulo: 'Rede Criptografada',
-    narrativa: 'Rotas confusas e dados ofuscados. Mantenha o foco.',
+    narrativa: 'Rotas espelhadas e dados ofuscados. Desvie pelos corredores criptografados até o portal.',
+    tilemapRef: 'base-mirror',
     perguntaId: 28,
-    jogavel: false,
-    distractions: []
+    jogavel: true,
+    distractions: [
+      {
+        tipo: 'notification',
+        titulo: 'Chave RSA expirada — renovar agora?',
+        atencaoDelta: 8,
+        triggerTile: { x: 13, y: 1 }
+      },
+      {
+        tipo: 'popup',
+        titulo: 'Tráfego suspeito detectado na rede',
+        atencaoDelta: 10,
+        triggerTile: { x: 13, y: 7 }
+      }
+    ]
   },
   {
     id: 5,
@@ -105,11 +136,25 @@ const FASES_CAMPANHA = [
   {
     id: 8,
     titulo: 'Sistema Corrompido',
-    narrativa: 'Glitches distorcem a realidade. Recupere o controle.',
+    narrativa: 'Glitches distorcem o labirinto espelhado. Encontre a saída antes que o sistema colapse.',
+    tilemapRef: 'base-mirror',
     perguntaId: 5,
-    jogavel: false,
-    cutscene: 'glitch',
-    distractions: []
+    jogavel: true,
+    mazeEffect: 'glitch',
+    distractions: [
+      {
+        tipo: 'popup',
+        titulo: 'KERNEL PANIC — reiniciar sistema?',
+        atencaoDelta: 12,
+        triggerTile: { x: 13, y: 1 }
+      },
+      {
+        tipo: 'notification',
+        titulo: 'Setor 7 corrompido — dados perdidos',
+        atencaoDelta: 10,
+        triggerTile: { x: 13, y: 7 }
+      }
+    ]
   },
   {
     id: 9,
@@ -133,4 +178,7 @@ const FASES_CAMPANHA = [
 window.FEATURES = FEATURES;
 window.CAMPANHA_CONFIG = CAMPANHA_CONFIG;
 window.BASE_TILEMAP = BASE_TILEMAP;
+window.BASE_TILEMAP_MIRROR = BASE_TILEMAP_MIRROR;
+window.TILEMAPS = TILEMAPS;
+window.getTilemap = getTilemap;
 window.FASES_CAMPANHA = FASES_CAMPANHA;

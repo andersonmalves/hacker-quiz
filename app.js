@@ -435,7 +435,9 @@ const campanhaEstado = {
   faseSpawn: { x: 0, y: 0 },
   voltarParaMaze: false,
   distractionIndex: 0,
-  scoreFinal: 0
+  scoreFinal: 0,
+  fasesConcluidas: [],
+  timerPausado: false
 };
 
 const prefersReducedMotion = () =>
@@ -1198,6 +1200,10 @@ const elementos = {
     jogarCampanha: document.getElementById('btn-jogar-campanha'),
     quizClassico: document.getElementById('btn-quiz-classico'),
     verPodium: document.getElementById('btn-podium'),
+    continuarCampanha: document.getElementById('btn-continuar-campanha'),
+    novaCampanha: document.getElementById('btn-nova-campanha'),
+    quizResumo: document.getElementById('btn-quiz-resumo'),
+    podiumResumo: document.getElementById('btn-podium-resumo'),
     confirmar: document.getElementById('btn-confirmar'),
     proxima: document.getElementById('btn-proxima'),
     desistir: document.getElementById('btn-desistir'),
@@ -1225,6 +1231,7 @@ const elementos = {
     mazeTimerWrap: document.getElementById('maze-timer-wrap'),
     mazeAtencaoFill: document.getElementById('maze-atencao-fill'),
     mazeCanvas: document.getElementById('maze-canvas'),
+    mazeWrap: document.querySelector('.maze-wrap'),
     campanhaAcertos: document.getElementById('campanha-acertos'),
     campanhaTempoRestante: document.getElementById('campanha-tempo-restante'),
     campanhaScore: document.getElementById('campanha-score'),
@@ -1234,7 +1241,11 @@ const elementos = {
     distractionTitulo: document.getElementById('distraction-titulo'),
     cutsceneOverlay: document.getElementById('cutscene-overlay'),
     cutsceneScroll: document.getElementById('cutscene-scroll'),
-    cutsceneGlitch: document.getElementById('cutscene-glitch')
+    cutsceneGlitch: document.getElementById('cutscene-glitch'),
+    progressoResumo: document.getElementById('campanha-progresso-resumo'),
+    resumoFase: document.getElementById('resumo-fase'),
+    resumoTimer: document.getElementById('resumo-timer'),
+    acoesInicioPadrao: document.getElementById('acoes-inicio-padrao')
   },
   quiz: {
     numPergunta: document.getElementById('num-pergunta'),
@@ -1483,12 +1494,17 @@ const podiumManager = {
 
 const progressoCampanha = {
   salvar: () => {
+    if (campanhaEstado.modo === null || campanhaEstado.modo === 'classico') return;
+
     try {
       localStorage.setItem(CAMPANHA_CONFIG.storageKey, JSON.stringify({
+        versao: CAMPANHA_CONFIG.progressoVersao,
         faseAtual: campanhaEstado.faseAtual,
+        fasesConcluidas: campanhaEstado.fasesConcluidas,
         acertos: campanhaEstado.acertos,
         tempoRestante: campanhaEstado.tempoRestante,
-        atencao: campanhaEstado.atencao
+        atencao: campanhaEstado.atencao,
+        salvoEm: Date.now()
       }));
     } catch (e) {
       console.error('Erro ao salvar progresso da campanha:', e);
@@ -1502,16 +1518,25 @@ const progressoCampanha = {
       const parsed = JSON.parse(dados);
       const fase = Number(parsed.faseAtual);
       if (fase < 1 || fase > CAMPANHA_CONFIG.totalFases) return null;
+
+      const fasesConcluidas = Array.isArray(parsed.fasesConcluidas)
+        ? parsed.fasesConcluidas.filter((id) => id >= 1 && id <= CAMPANHA_CONFIG.totalFases)
+        : [];
+
       return {
         faseAtual: fase,
+        fasesConcluidas,
         acertos: Math.max(0, Number(parsed.acertos) || 0),
         tempoRestante: Math.max(0, Number(parsed.tempoRestante) || CAMPANHA_CONFIG.tempoInicialSegundos),
-        atencao: Math.min(100, Math.max(0, Number(parsed.atencao) || CAMPANHA_CONFIG.atencaoInicial))
+        atencao: Math.min(100, Math.max(0, Number(parsed.atencao) || CAMPANHA_CONFIG.atencaoInicial)),
+        salvoEm: Number(parsed.salvoEm) || null
       };
     } catch (e) {
       return null;
     }
   },
+
+  temProgresso: () => progressoCampanha.carregar() !== null,
 
   limpar: () => {
     try {
@@ -1519,6 +1544,30 @@ const progressoCampanha = {
     } catch (e) {
       console.error('Erro ao limpar progresso da campanha:', e);
     }
+  }
+};
+
+const campanhaUI = {
+  atualizarMenuProgresso: () => {
+    const salvo = progressoCampanha.carregar();
+    const resumo = elementos.campanha.progressoResumo;
+    const acoes = elementos.campanha.acoesInicioPadrao;
+
+    if (!salvo || !resumo) {
+      if (resumo) resumo.hidden = true;
+      if (acoes) acoes.hidden = false;
+      return;
+    }
+
+    if (elementos.campanha.resumoFase) {
+      elementos.campanha.resumoFase.textContent = utils.formatarNumero(salvo.faseAtual);
+    }
+    if (elementos.campanha.resumoTimer) {
+      elementos.campanha.resumoTimer.textContent = campanhaUtils.formatarTimer(salvo.tempoRestante);
+    }
+
+    resumo.hidden = false;
+    if (acoes) acoes.hidden = true;
   }
 };
 
@@ -1531,23 +1580,41 @@ const campanhaUtils = {
 
   getFaseConfig: (id) => FASES_CAMPANHA.find((f) => f.id === id),
 
-  getPerguntaPorId: (id) => poolPerguntas.find((p) => p.id === id)
+  getPerguntaPorId: (id) => poolPerguntas.find((p) => p.id === id),
+
+  getTilemap: (ref) => (typeof getTilemap === 'function' ? getTilemap(ref) : BASE_TILEMAP),
+
+  aplicarEfeitoMaze: (fase) => {
+    const wrap = elementos.campanha.mazeWrap;
+    if (!wrap) return;
+    wrap.classList.remove('maze-glitch');
+    if (fase && fase.mazeEffect === 'glitch') {
+      wrap.classList.add('maze-glitch');
+    }
+  },
+
+  limparEfeitoMaze: () => {
+    elementos.campanha.mazeWrap?.classList.remove('maze-glitch');
+  }
 };
 
 const campaignManager = {
   iniciar: async (restaurar = true) => {
     MazeEngine.stop();
+    MazeDpad.unbind();
     campaignManager.pararTimer();
 
     const salvo = restaurar ? progressoCampanha.carregar() : null;
     if (salvo) {
       campanhaEstado.faseAtual = salvo.faseAtual;
+      campanhaEstado.fasesConcluidas = salvo.fasesConcluidas;
       campanhaEstado.acertos = salvo.acertos;
       campanhaEstado.tempoRestante = salvo.tempoRestante;
       campanhaEstado.atencao = salvo.atencao;
     } else {
       progressoCampanha.limpar();
       campanhaEstado.faseAtual = 1;
+      campanhaEstado.fasesConcluidas = [];
       campanhaEstado.acertos = 0;
       campanhaEstado.tempoRestante = CAMPANHA_CONFIG.tempoInicialSegundos;
       campanhaEstado.atencao = CAMPANHA_CONFIG.atencaoInicial;
@@ -1556,15 +1623,18 @@ const campaignManager = {
     campanhaEstado.modo = 'campanha';
     campanhaEstado.voltarParaMaze = false;
     campanhaEstado.distractionIndex = 0;
+    campanhaEstado.timerPausado = false;
     estado.modoJogo = 'campanha';
 
     campaignManager.iniciarTimer();
     campaignManager.entrarFase(campanhaEstado.faseAtual);
-    console.info('campanha_iniciada', { fase: campanhaEstado.faseAtual });
+    progressoCampanha.salvar();
+    console.info('campanha_iniciada', { fase: campanhaEstado.faseAtual, restaurar });
   },
 
   iniciarTimer: () => {
     campaignManager.pararTimer();
+    campanhaEstado.timerPausado = false;
     campanhaEstado.timerInterval = setInterval(() => {
       campaignManager.tickTimer();
     }, 1000);
@@ -1575,6 +1645,16 @@ const campaignManager = {
       clearInterval(campanhaEstado.timerInterval);
       campanhaEstado.timerInterval = null;
     }
+    campanhaEstado.timerPausado = true;
+  },
+
+  retomarTimer: () => {
+    if (campanhaEstado.modo === null || campanhaEstado.modo === 'classico') return;
+    if (campanhaEstado.timerInterval) return;
+    campanhaEstado.timerPausado = false;
+    campanhaEstado.timerInterval = setInterval(() => {
+      campaignManager.tickTimer();
+    }, 1000);
   },
 
   tickTimer: () => {
@@ -1666,21 +1746,27 @@ const campaignManager = {
   iniciarLabirinto: (fase) => {
     campanhaEstado.modo = 'campanha';
     campanhaEstado.voltarParaMaze = true;
+    campanhaUtils.aplicarEfeitoMaze(fase);
     utils.trocarTela('maze');
 
+    const tilemap = campanhaUtils.getTilemap(fase.tilemapRef || 'base');
     const spawnInfo = MazeEngine.start({
       canvas: elementos.campanha.mazeCanvas,
-      tilemap: BASE_TILEMAP,
+      tilemap,
       onExit: () => campaignManager.onMazeExit(fase),
       onDistraction: (pos) => campaignManager.onMazeDistraction(fase, pos)
     });
 
     campanhaEstado.faseSpawn = { x: spawnInfo.spawnX, y: spawnInfo.spawnY };
+    MazeDpad.bind((dx, dy) => MazeEngine.move(dx, dy));
     campaignManager.atualizarHud();
+    progressoCampanha.salvar();
   },
 
   onMazeExit: (fase) => {
     MazeEngine.stop();
+    MazeDpad.unbind();
+    campanhaUtils.limparEfeitoMaze();
     campaignManager.abrirCheckpoint(fase.perguntaId, true);
   },
 
@@ -1698,6 +1784,7 @@ const campaignManager = {
 
   mostrarDistraction: (config) => {
     MazeEngine.stop();
+    MazeDpad.unbind();
     const tipoLabel = config.tipo === 'notification' ? 'NOTIFICAÇÃO' : 'POP-UP';
     if (elementos.campanha.distractionTipo) {
       elementos.campanha.distractionTipo.textContent = tipoLabel;
@@ -1774,6 +1861,7 @@ const campaignManager = {
     elementos.quiz.feedback.classList.remove('visivel', 'acerto', 'erro');
 
     utils.trocarTela('quiz');
+    progressoCampanha.salvar();
     await quizManager.renderizarPergunta(true);
   },
 
@@ -1786,6 +1874,9 @@ const campaignManager = {
   confirmarCheckpoint: (acertou) => {
     if (acertou) {
       campanhaEstado.acertos += 1;
+      if (!campanhaEstado.fasesConcluidas.includes(campanhaEstado.faseAtual)) {
+        campanhaEstado.fasesConcluidas.push(campanhaEstado.faseAtual);
+      }
       console.info('fase_concluida', { fase: campanhaEstado.faseAtual });
 
       if (campanhaEstado.faseAtual >= CAMPANHA_CONFIG.totalFases) {
@@ -1833,6 +1924,8 @@ const campaignManager = {
   finalizarCampanha: () => {
     campaignManager.pararTimer();
     MazeEngine.stop();
+    MazeDpad.unbind();
+    campanhaUtils.limparEfeitoMaze();
     progressoCampanha.limpar();
 
     campanhaEstado.scoreFinal =
@@ -1857,6 +1950,7 @@ const campaignManager = {
 
     resetarEstadoQuiz();
     utils.trocarTela('finalCampanha');
+    campanhaUI.atualizarMenuProgresso();
     sfxManager.playComplete();
   },
 
@@ -1864,20 +1958,28 @@ const campaignManager = {
     console.info('timer_esgotado');
     campaignManager.pararTimer();
     MazeEngine.stop();
+    MazeDpad.unbind();
+    campanhaUtils.limparEfeitoMaze();
+    progressoCampanha.limpar();
     campanhaEstado.modo = null;
     estado.modoJogo = null;
     resetarEstadoQuiz();
     utils.trocarTela('traceGameover');
+    campanhaUI.atualizarMenuProgresso();
     sfxManager.playErro();
   },
 
   desistir: () => {
     campaignManager.pararTimer();
     MazeEngine.stop();
+    MazeDpad.unbind();
+    campanhaUtils.limparEfeitoMaze();
+    progressoCampanha.salvar();
     campanhaEstado.modo = null;
     estado.modoJogo = null;
     resetarEstadoQuiz();
     utils.trocarTela('inicial');
+    campanhaUI.atualizarMenuProgresso();
   },
 
   reiniciar: async () => {
@@ -2262,7 +2364,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (elementos.botoes.jogarCampanha) {
     elementos.botoes.jogarCampanha.addEventListener('click', async () => {
       try {
-        await campaignManager.iniciar(true);
+        await campaignManager.iniciar(false);
         await audioManager.iniciar();
       } catch (e) {
         console.error('Erro ao iniciar campanha:', e);
@@ -2270,18 +2372,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (elementos.botoes.quizClassico) {
-    elementos.botoes.quizClassico.addEventListener('click', async () => {
+  if (elementos.botoes.continuarCampanha) {
+    elementos.botoes.continuarCampanha.addEventListener('click', async () => {
       try {
-        await quizManager.iniciar();
+        await campaignManager.iniciar(true);
         await audioManager.iniciar();
       } catch (e) {
-        console.error('Erro ao iniciar quiz ou áudio:', e);
+        console.error('Erro ao continuar campanha:', e);
       }
     });
   }
 
+  if (elementos.botoes.novaCampanha) {
+    elementos.botoes.novaCampanha.addEventListener('click', async () => {
+      try {
+        await campaignManager.iniciar(false);
+        await audioManager.iniciar();
+      } catch (e) {
+        console.error('Erro ao iniciar nova campanha:', e);
+      }
+    });
+  }
+
+  const iniciarQuizClassico = async () => {
+    try {
+      await quizManager.iniciar();
+      await audioManager.iniciar();
+    } catch (e) {
+      console.error('Erro ao iniciar quiz ou áudio:', e);
+    }
+  };
+
+  if (elementos.botoes.quizClassico) {
+    elementos.botoes.quizClassico.addEventListener('click', iniciarQuizClassico);
+  }
+
+  if (elementos.botoes.quizResumo) {
+    elementos.botoes.quizResumo.addEventListener('click', iniciarQuizClassico);
+  }
+
   elementos.botoes.verPodium.addEventListener('click', podiumRenderer.mostrar);
+
+  if (elementos.botoes.podiumResumo) {
+    elementos.botoes.podiumResumo.addEventListener('click', podiumRenderer.mostrar);
+  }
+
+  campanhaUI.atualizarMenuProgresso();
 
   if (elementos.botoes.briefingContinuar) {
     elementos.botoes.briefingContinuar.addEventListener('click', () => {
@@ -2309,13 +2445,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  document.querySelectorAll('.dpad-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const dir = btn.dataset.dir;
-      const map = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-      const move = map[dir];
-      if (move) MazeEngine.move(move[0], move[1]);
-    });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (campanhaEstado.modo && campanhaEstado.modo !== 'classico') {
+        progressoCampanha.salvar();
+        campaignManager.pararTimer();
+      }
+      return;
+    }
+    campaignManager.retomarTimer();
+  });
+
+  window.addEventListener('beforeunload', () => {
+    if (campanhaEstado.modo && campanhaEstado.modo !== 'classico') {
+      progressoCampanha.salvar();
+    }
   });
 
   if (elementos.botoes.traceReiniciar) {
@@ -2382,11 +2526,13 @@ document.addEventListener('DOMContentLoaded', () => {
   elementos.botoes.jogarNovamente.addEventListener('click', () => {
     audioManager.parar();
     utils.trocarTela('inicial');
+    campanhaUI.atualizarMenuProgresso();
   });
 
   elementos.botoes.voltar.addEventListener('click', () => {
     audioManager.parar();
     utils.trocarTela('inicial');
+    campanhaUI.atualizarMenuProgresso();
   });
 
   // Enter no input de nome
@@ -2425,11 +2571,12 @@ window.help = () => {
   console.log('  campanha.limpar() - Limpa progresso da campanha');
   console.log('  estado - Mostra o estado atual do jogo');
   console.log('  poolPerguntas - Lista todas as 30 perguntas disponíveis');
-  return 'Cyber Maze v1.0';
+  return 'Cyber Maze v1.2';
 };
 
 window.campanha = {
-  limpar: progressoCampanha.limpar
+  limpar: progressoCampanha.limpar,
+  get: progressoCampanha.carregar
 };
 
 window.podium = {

@@ -100,7 +100,20 @@
         </div>
       </div>
 
-      <div class="actions">
+      <div id="campanha-progresso-resumo" class="campanha-progresso-resumo" hidden>
+        <p class="progresso-resumo-texto">
+          Campanha em andamento — Fase <span id="resumo-fase">01</span>/10
+          · Tempo <span id="resumo-timer">15:00</span>
+        </p>
+        <div class="actions actions-compact">
+          <button type="button" id="btn-continuar-campanha" class="btn-principal">CONTINUAR</button>
+          <button type="button" id="btn-nova-campanha" class="btn-secundario">NOVA CAMPANHA</button>
+          <button type="button" id="btn-quiz-resumo" class="btn-secundario">QUIZ CLÁSSICO</button>
+          <button type="button" id="btn-podium-resumo" class="btn-secundario">VER PÓDIO</button>
+        </div>
+      </div>
+
+      <div class="actions" id="acoes-inicio-padrao">
         <button id="btn-jogar-campanha" class="btn-principal">JOGAR</button>
         <button id="btn-quiz-classico" class="btn-secundario">QUIZ CLÁSSICO</button>
         <button id="btn-podium" class="btn-secundario">VER PÓDIO</button>
@@ -133,16 +146,22 @@
           <div class="barra-atencao"><div id="maze-atencao-fill" class="barra-atencao-fill"></div></div>
         </div>
       </div>
-      <p class="maze-hint">Setas ou WASD — alcance o portal roxo</p>
+      <p class="maze-hint maze-hint-desktop">Setas ou WASD — alcance o portal roxo</p>
+      <p class="maze-hint maze-hint-touch">Deslize no mapa ou use o D-pad — portal roxo = saída</p>
       <div class="maze-wrap">
         <canvas id="maze-canvas" aria-label="Labirinto da fase atual"></canvas>
       </div>
-      <div class="dpad" aria-label="Controles touch">
-        <button type="button" class="dpad-btn" data-dir="up" aria-label="Mover para cima">▲</button>
-        <div class="dpad-row">
+      <div class="dpad" id="maze-dpad" aria-label="Controles touch">
+        <div class="dpad-grid">
+          <span class="dpad-spacer" aria-hidden="true"></span>
+          <button type="button" class="dpad-btn" data-dir="up" aria-label="Mover para cima">▲</button>
+          <span class="dpad-spacer" aria-hidden="true"></span>
           <button type="button" class="dpad-btn" data-dir="left" aria-label="Mover para esquerda">◀</button>
-          <button type="button" class="dpad-btn" data-dir="down" aria-label="Mover para baixo">▼</button>
+          <span class="dpad-center" aria-hidden="true"></span>
           <button type="button" class="dpad-btn" data-dir="right" aria-label="Mover para direita">▶</button>
+          <span class="dpad-spacer" aria-hidden="true"></span>
+          <button type="button" class="dpad-btn" data-dir="down" aria-label="Mover para baixo">▼</button>
+          <span class="dpad-spacer" aria-hidden="true"></span>
         </div>
       </div>
       <button type="button" id="btn-maze-desistir" class="btn-secundario btn-desistir-campanha">DESISTIR</button>
@@ -265,6 +284,7 @@
 
   <script src="maze/fases-config.js"></script>
   <script src="maze/engine.js"></script>
+  <script src="maze/dpad.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

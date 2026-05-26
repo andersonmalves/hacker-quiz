@@ -1252,6 +1252,13 @@ body {
   .distraction-modal {
     animation: none !important;
   }
+
+  .maze-wrap.maze-glitch,
+  .maze-wrap.maze-glitch #maze-canvas {
+    animation: none !important;
+    filter: none;
+    transform: none;
+  }
 }
 
 /* === Cyber Maze — Campanha === */
@@ -1263,6 +1270,45 @@ body {
   margin-bottom: 20px;
   max-width: 420px;
   line-height: 1.5;
+}
+
+.campanha-progresso-resumo {
+  width: 100%;
+  max-width: 420px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-purple);
+  border-radius: 4px;
+  box-shadow: 0 0 16px var(--accent-purple-glow);
+}
+
+.campanha-progresso-resumo[hidden] {
+  display: none;
+}
+
+.progresso-resumo-texto {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+.progresso-resumo-texto span {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.actions-compact {
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.actions-compact .btn-principal,
+.actions-compact .btn-secundario {
+  width: 100%;
 }
 
 .tela-campanha {
@@ -1360,6 +1406,14 @@ body {
   margin-bottom: 12px;
 }
 
+.maze-hint-touch {
+  display: none;
+}
+
+.maze-hint-desktop {
+  display: block;
+}
+
 .maze-wrap {
   display: flex;
   justify-content: center;
@@ -1377,35 +1431,102 @@ body {
   height: auto;
 }
 
-.dpad {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 12px;
+.maze-wrap.maze-glitch {
+  animation: maze-glitch-shake 0.15s infinite;
+  border-color: var(--error);
+  box-shadow: 0 0 24px var(--error-glow);
 }
 
-.dpad-row {
-  display: flex;
-  gap: 4px;
+.maze-wrap.maze-glitch #maze-canvas {
+  filter: hue-rotate(90deg) contrast(1.2);
+}
+
+@keyframes maze-glitch-shake {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, 1px); }
+  50% { transform: translate(2px, -1px); }
+  75% { transform: translate(-1px, -2px); }
+}
+
+.dpad {
+  display: none;
+  margin-bottom: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.dpad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  grid-template-rows: repeat(3, 64px);
+  gap: 6px;
+  justify-content: center;
+}
+
+.dpad-spacer {
+  display: block;
+}
+
+.dpad-center {
+  display: block;
+  border: 1px dashed var(--text-muted);
+  border-radius: 4px;
+  opacity: 0.35;
 }
 
 .dpad-btn {
-  width: 52px;
-  height: 52px;
-  font-size: 1.2rem;
+  width: 64px;
+  height: 64px;
+  font-size: 1.35rem;
   background: var(--bg-card);
-  border: 1px solid var(--accent-blue);
+  border: 2px solid var(--accent-blue);
   color: var(--accent-blue);
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   font-family: var(--font-mono);
-  touch-action: manipulation;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.1s ease, transform 0.08s ease;
 }
 
-.dpad-btn:active {
+.dpad-btn:active,
+.dpad-btn.pressed {
   background: var(--accent-blue);
   color: var(--bg-primary);
+  transform: scale(0.94);
+  box-shadow: 0 0 12px var(--accent-blue-glow);
+}
+
+@media (hover: none), (pointer: coarse) {
+  .dpad {
+    display: block;
+  }
+
+  .maze-hint-desktop {
+    display: none;
+  }
+
+  .maze-hint-touch {
+    display: block;
+  }
+
+  .maze-wrap {
+    touch-action: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .dpad {
+    display: block;
+  }
+
+  .maze-hint-desktop {
+    display: none;
+  }
+
+  .maze-hint-touch {
+    display: block;
+  }
 }
 
 .distraction-overlay {
