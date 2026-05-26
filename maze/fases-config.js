@@ -44,6 +44,9 @@ const espelharTilemap = (tilemap) => ({
   grid: tilemap.grid.map((row) => [...row].reverse())
 });
 
+/** Converte coordenada X do mapa base para o espelhado (cols × rows). */
+const espelharCoord = (x, cols) => cols - 1 - x;
+
 const BASE_TILEMAP_MIRROR = espelharTilemap(BASE_TILEMAP);
 
 const TILEMAPS = {
@@ -93,7 +96,7 @@ const FASES_CAMPANHA = [
         tipo: 'notification',
         titulo: 'Chave RSA expirada — renovar agora?',
         atencaoDelta: 8,
-        triggerTile: { x: 13, y: 1 }
+        triggerTile: { x: espelharCoord(13, BASE_TILEMAP.cols), y: 1 }
       },
       {
         tipo: 'popup',
@@ -146,7 +149,7 @@ const FASES_CAMPANHA = [
         tipo: 'popup',
         titulo: 'KERNEL PANIC — reiniciar sistema?',
         atencaoDelta: 12,
-        triggerTile: { x: 13, y: 1 }
+        triggerTile: { x: espelharCoord(13, BASE_TILEMAP.cols), y: 1 }
       },
       {
         tipo: 'notification',
@@ -181,4 +184,5 @@ window.BASE_TILEMAP = BASE_TILEMAP;
 window.BASE_TILEMAP_MIRROR = BASE_TILEMAP_MIRROR;
 window.TILEMAPS = TILEMAPS;
 window.getTilemap = getTilemap;
+window.espelharCoord = espelharCoord;
 window.FASES_CAMPANHA = FASES_CAMPANHA;

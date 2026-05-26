@@ -1548,10 +1548,54 @@ const progressoCampanha = {
 };
 
 const campanhaUI = {
+  campanhaHabilitada: () =>
+    typeof FEATURES === 'undefined' || FEATURES.modoCampanha,
+
+  quizClassicoHabilitado: () =>
+    typeof FEATURES === 'undefined' || FEATURES.quizClassico,
+
+  aplicarFeatureFlags: () => {
+    const modoCampanha = campanhaUI.campanhaHabilitada();
+    const quizClassico = campanhaUI.quizClassicoHabilitado();
+
+    if (elementos.botoes.jogarCampanha) {
+      elementos.botoes.jogarCampanha.hidden = !modoCampanha;
+    }
+
+    document.querySelectorAll('.campanha-only').forEach((el) => {
+      el.hidden = !modoCampanha;
+    });
+
+    [elementos.botoes.quizClassico, elementos.botoes.quizResumo].forEach((btn) => {
+      if (!btn) return;
+      btn.hidden = !quizClassico;
+    });
+
+    if (elementos.botoes.quizClassico && elementos.botoes.jogarCampanha) {
+      const virarPrincipal = !modoCampanha && quizClassico;
+      elementos.botoes.quizClassico.classList.toggle('btn-principal', virarPrincipal);
+      elementos.botoes.quizClassico.classList.toggle('btn-secundario', !virarPrincipal);
+    }
+
+    if (!modoCampanha && elementos.campanha.progressoResumo) {
+      elementos.campanha.progressoResumo.hidden = true;
+    }
+    if (elementos.campanha.acoesInicioPadrao) {
+      elementos.campanha.acoesInicioPadrao.hidden = false;
+    }
+  },
+
   atualizarMenuProgresso: () => {
-    const salvo = progressoCampanha.carregar();
     const resumo = elementos.campanha.progressoResumo;
     const acoes = elementos.campanha.acoesInicioPadrao;
+
+    if (!campanhaUI.campanhaHabilitada()) {
+      if (resumo) resumo.hidden = true;
+      if (acoes) acoes.hidden = false;
+      return;
+    }
+
+    const salvo = progressoCampanha.carregar();
 
     if (!salvo || !resumo) {
       if (resumo) resumo.hidden = true;
@@ -1600,6 +1644,8 @@ const campanhaUtils = {
 
 const campaignManager = {
   iniciar: async (restaurar = true) => {
+    if (!campanhaUI.campanhaHabilitada()) return;
+
     MazeEngine.stop();
     MazeDpad.unbind();
     campaignManager.pararTimer();
@@ -1743,22 +1789,46 @@ const campaignManager = {
     campaignManager.abrirCheckpoint(fase.perguntaId, false);
   },
 
+  buildMazeOptions: (fase, preserveTriggers = false) => ({
+    canvas: elementos.campanha.mazeCanvas,
+    tilemap: campanhaUtils.getTilemap(fase.tilemapRef || 'base'),
+    preserveTriggers,
+    onExit: () => campaignManager.onMazeExit(fase),
+    onDistraction: (pos) => campaignManager.onMazeDistraction(fase, pos)
+  }),
+
+  bindMazeControls: () => {
+    MazeDpad.bind((dx, dy) => MazeEngine.move(dx, dy));
+  },
+
   iniciarLabirinto: (fase) => {
     campanhaEstado.modo = 'campanha';
     campanhaEstado.voltarParaMaze = true;
     campanhaUtils.aplicarEfeitoMaze(fase);
     utils.trocarTela('maze');
 
-    const tilemap = campanhaUtils.getTilemap(fase.tilemapRef || 'base');
-    const spawnInfo = MazeEngine.start({
-      canvas: elementos.campanha.mazeCanvas,
-      tilemap,
-      onExit: () => campaignManager.onMazeExit(fase),
-      onDistraction: (pos) => campaignManager.onMazeDistraction(fase, pos)
-    });
+    const spawnInfo = MazeEngine.start(campaignManager.buildMazeOptions(fase));
 
     campanhaEstado.faseSpawn = { x: spawnInfo.spawnX, y: spawnInfo.spawnY };
-    MazeDpad.bind((dx, dy) => MazeEngine.move(dx, dy));
+    campaignManager.bindMazeControls();
+    campaignManager.atualizarHud();
+    progressoCampanha.salvar();
+  },
+
+  retomarLabirinto: (fase) => {
+    campanhaEstado.modo = 'campanha';
+    campanhaEstado.voltarParaMaze = true;
+    campanhaUtils.aplicarEfeitoMaze(fase);
+    utils.trocarTela('maze');
+
+    if (!MazeEngine.resumeAtSpawn()) {
+      const spawnInfo = MazeEngine.start(
+        campaignManager.buildMazeOptions(fase, true)
+      );
+      campanhaEstado.faseSpawn = { x: spawnInfo.spawnX, y: spawnInfo.spawnY };
+    }
+
+    campaignManager.bindMazeControls();
     campaignManager.atualizarHud();
     progressoCampanha.salvar();
   },
@@ -1816,7 +1886,7 @@ const campaignManager = {
 
     const fase = campanhaUtils.getFaseConfig(campanhaEstado.faseAtual);
     if (fase && fase.jogavel) {
-      campaignManager.iniciarLabirinto(fase);
+      campaignManager.retomarLabirinto(fase);
     }
   },
 
@@ -1912,7 +1982,7 @@ const campaignManager = {
     resetarEstadoQuiz();
 
     if (campanhaEstado.voltarParaMaze && fase && fase.jogavel) {
-      campaignManager.iniciarLabirinto(fase);
+      campaignManager.retomarLabirinto(fase);
       return;
     }
 
@@ -2032,6 +2102,8 @@ const resetarEstadoQuiz = () => {
 // Lógica do Quiz
 const quizManager = {
   iniciar: async () => {
+    if (!campanhaUI.quizClassicoHabilitado()) return;
+
     campaignManager.pararTimer();
     MazeEngine.stop();
     campanhaEstado.modo = 'classico';
@@ -2417,6 +2489,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elementos.botoes.podiumResumo.addEventListener('click', podiumRenderer.mostrar);
   }
 
+  campanhaUI.aplicarFeatureFlags();
   campanhaUI.atualizarMenuProgresso();
 
   if (elementos.botoes.briefingContinuar) {

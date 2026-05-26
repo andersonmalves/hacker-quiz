@@ -23,7 +23,6 @@
   let triggeredDistractions = new Set();
   let callbacks = {};
   let keyHandler = null;
-  let moveQueue = null;
 
   const tileAt = (x, y) => {
     if (!tilemap || y < 0 || y >= tilemap.rows || x < 0 || x >= tilemap.cols) return TILE.WALL;
@@ -174,8 +173,9 @@
         onExit: options.onExit || null,
         onDistraction: options.onDistraction || null
       };
-      triggeredDistractions = new Set();
-      moveQueue = options;
+      if (!options.preserveTriggers) {
+        triggeredDistractions = new Set();
+      }
 
       canvas.width = tilemap.cols * tilemap.tileSize;
       canvas.height = tilemap.rows * tilemap.tileSize;
@@ -202,6 +202,21 @@
       const spawn = findSpawn();
       setPlayerTile(spawn.x, spawn.y);
       render();
+    },
+
+    canResume() {
+      return Boolean(tilemap && canvas && ctx);
+    },
+
+    resumeAtSpawn() {
+      if (!tilemap || !canvas || !ctx) return false;
+      const spawn = findSpawn();
+      setPlayerTile(spawn.x, spawn.y);
+      running = true;
+      bindKeys();
+      render();
+      loop();
+      return true;
     },
 
     move(dx, dy) {
