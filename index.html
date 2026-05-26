@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Quiz interativo sobre a carreira de Engenharia de Software — dia a dia, salários, formação e tecnologias.">
+  <meta name="description" content="Cyber Maze – Escape da Internet. Labirinto digital educativo com quiz sobre carreira em tecnologia.">
   <meta name="theme-color" content="#0a0a0a">
-  <title>Hacker Quiz - Engenharia de Software</title>
+  <title>Cyber Maze – Escape da Internet</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%230a0a0a' width='32' height='32'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='18' fill='%2300ff41' text-anchor='middle'%3E%26gt;%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,7 +13,6 @@
   <link rel="stylesheet" href="style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script>
-    // Fallback caso Tone.js falhe ao carregar
     window.addEventListener('error', function(e) {
       if (e.target && e.target.src && e.target.src.includes('tone')) {
         console.warn('Tone.js não pôde ser carregado. O jogo funcionará sem áudio.');
@@ -27,7 +26,7 @@
     <span id="mute-icon" aria-hidden="true">🔊</span>
     <span class="sr-only" id="mute-label">Som ligado</span>
   </button>
-  
+
   <div class="matrix-bg"></div>
 
   <div id="transition-overlay" class="transition-overlay" hidden aria-hidden="true">
@@ -39,11 +38,33 @@
       </div>
     </div>
   </div>
-  
+
+  <div id="distraction-overlay" class="distraction-overlay" hidden aria-hidden="true">
+    <div class="distraction-modal" role="dialog" aria-labelledby="distraction-titulo">
+      <p id="distraction-tipo" class="distraction-tipo">POP-UP</p>
+      <h3 id="distraction-titulo" class="distraction-titulo">Distração</h3>
+      <button type="button" id="btn-fechar-distraction" class="btn-principal btn-fechar-distraction">FECHAR [X]</button>
+    </div>
+  </div>
+
+  <div id="cutscene-overlay" class="cutscene-overlay" hidden aria-hidden="true">
+    <div id="cutscene-scroll" class="cutscene-scroll" hidden>
+      <div class="scroll-feed">
+        <p>Post #2847 — você não vai acreditar...</p>
+        <p>Reels infinitos carregando...</p>
+        <p>Mais um vídeo... só mais um...</p>
+        <p>Notificação: alguém curtiu sua foto</p>
+        <p>Scroll... scroll... scroll...</p>
+      </div>
+    </div>
+    <div id="cutscene-glitch" class="cutscene-glitch" hidden>
+      <p class="glitch" data-text="SYSTEM CORRUPTED">SYSTEM CORRUPTED</p>
+    </div>
+  </div>
+
   <main class="container">
     <!-- Tela Inicial -->
     <section id="tela-inicial" class="tela ativa">
-      <!-- Logo com máscara -->
       <div class="logo-container">
         <div class="mask-mini">
           <svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -55,34 +76,76 @@
           </svg>
         </div>
         <div class="logo">
-          <span class="glitch" data-text="HACKER QUIZ">HACKER QUIZ</span>
+          <span class="glitch" data-text="CYBER MAZE">CYBER MAZE</span>
         </div>
-        <p class="tagline">// Engenharia de Software Edition</p>
+        <p class="tagline">// Escape da Internet</p>
       </div>
 
-      <p class="subtitulo">Teste seus conhecimentos na carreira tech</p>
+      <p class="subtitulo">Entre no labirinto digital. Responda. Escape. Reflita.</p>
+      <p class="mensagem-inicial">A internet pode conectar, mas também pode prender. Você consegue escapar?</p>
 
-      <!-- Terminal com infos do jogo -->
       <div class="terminal-info">
         <div class="terminal-header-mini">
           <span class="term-dot red"></span>
           <span class="term-dot yellow"></span>
           <span class="term-dot green"></span>
-          <span class="term-title">root@anonymous:~</span>
+          <span class="term-title">root@cybermaze:~</span>
         </div>
         <div class="terminal-body-mini">
-          <div class="term-line"><span class="term-prompt">$</span> cat game_info.txt</div>
-          <div class="term-output">> 10 perguntas aleatórias</div>
-          <div class="term-output">> Níveis: Junior → Pleno → Senior</div>
-          <div class="term-output">> Tema: Dark Web / Anonymous</div>
+          <div class="term-line"><span class="term-prompt">$</span> cat mission.txt</div>
+          <div class="term-output">> 10 fases temáticas</div>
+          <div class="term-output">> Labirinto + quiz original</div>
+          <div class="term-output">> Trace Detector ativo</div>
           <div class="term-line blink"><span class="term-cursor">_</span></div>
         </div>
       </div>
 
       <div class="actions">
-        <button id="btn-iniciar" class="btn-principal">INICIAR INVASAO</button>
-        <button id="btn-podium" class="btn-secundario">VER PODIUM</button>
+        <button id="btn-jogar-campanha" class="btn-principal">JOGAR</button>
+        <button id="btn-quiz-classico" class="btn-secundario">QUIZ CLÁSSICO</button>
+        <button id="btn-podium" class="btn-secundario">VER PÓDIO</button>
       </div>
+    </section>
+
+    <!-- Briefing de Fase -->
+    <section id="tela-briefing" class="tela tela-campanha">
+      <div class="hud-campanha" id="hud-briefing">
+        <div class="hud-item">FASE <span id="briefing-fase-num">01</span>/10</div>
+        <div class="hud-item">TEMPO <span id="briefing-timer">15:00</span></div>
+        <div class="hud-atencao">
+          <span>ATENÇÃO</span>
+          <div class="barra-atencao"><div id="briefing-atencao-fill" class="barra-atencao-fill"></div></div>
+        </div>
+      </div>
+      <h2 id="briefing-titulo" class="titulo-fase">Login Inicial</h2>
+      <p id="briefing-narrativa" class="narrativa-fase">Carregando...</p>
+      <button type="button" id="btn-briefing-continuar" class="btn-principal">CONTINUAR</button>
+      <button type="button" id="btn-briefing-desistir" class="btn-secundario btn-desistir-campanha">DESISTIR</button>
+    </section>
+
+    <!-- Labirinto -->
+    <section id="tela-maze" class="tela tela-campanha">
+      <div class="hud-campanha" id="hud-maze">
+        <div class="hud-item">FASE <span id="maze-fase-num">01</span>/10</div>
+        <div class="hud-item hud-timer" id="maze-timer-wrap">TEMPO <span id="maze-timer">15:00</span></div>
+        <div class="hud-atencao">
+          <span>ATENÇÃO</span>
+          <div class="barra-atencao"><div id="maze-atencao-fill" class="barra-atencao-fill"></div></div>
+        </div>
+      </div>
+      <p class="maze-hint">Setas ou WASD — alcance o portal roxo</p>
+      <div class="maze-wrap">
+        <canvas id="maze-canvas" aria-label="Labirinto da fase atual"></canvas>
+      </div>
+      <div class="dpad" aria-label="Controles touch">
+        <button type="button" class="dpad-btn" data-dir="up" aria-label="Mover para cima">▲</button>
+        <div class="dpad-row">
+          <button type="button" class="dpad-btn" data-dir="left" aria-label="Mover para esquerda">◀</button>
+          <button type="button" class="dpad-btn" data-dir="down" aria-label="Mover para baixo">▼</button>
+          <button type="button" class="dpad-btn" data-dir="right" aria-label="Mover para direita">▶</button>
+        </div>
+      </div>
+      <button type="button" id="btn-maze-desistir" class="btn-secundario btn-desistir-campanha">DESISTIR</button>
     </section>
 
     <!-- Tela do Quiz -->
@@ -100,20 +163,17 @@
           DESISTIR
         </button>
       </div>
-      
-      <!-- Barra de progresso animada -->
+
       <div class="progresso-bar">
         <div class="progresso-fill" id="barra-progresso" style="width: 0%"></div>
       </div>
-      
+
       <div class="card-pergunta">
         <div class="categoria" id="categoria-pergunta">GIT</div>
         <h2 id="texto-pergunta">Carregando...</h2>
       </div>
 
-      <div class="alternativas" id="container-alternativas">
-        <!-- Alternativas serão inseridas via JS -->
-      </div>
+      <div class="alternativas" id="container-alternativas"></div>
 
       <div class="feedback" id="feedback" role="status" aria-live="polite" aria-atomic="true"></div>
 
@@ -121,7 +181,7 @@
       <button id="btn-proxima" class="btn-principal oculto">PROXIMA ></button>
     </section>
 
-    <!-- Tela de Resultado -->
+    <!-- Tela de Resultado (Quiz Clássico) -->
     <section id="tela-resultado" class="tela">
       <div class="resultado-header">
         <p id="resultado-rank" class="resultado-rank">OPERADOR</p>
@@ -153,12 +213,48 @@
       <button id="btn-jogar-novamente" class="btn-secundario">JOGAR NOVAMENTE</button>
     </section>
 
+    <!-- Final da Campanha -->
+    <section id="tela-final-campanha" class="tela tela-campanha tela-final-campanha">
+      <p class="resultado-rank rank-elite">DESCONECTADO</p>
+      <h2 class="titulo-final">ESCAPE CONCLUÍDO</h2>
+      <blockquote class="mensagem-final-educativa">
+        "A internet é uma ferramenta. Não deixe ela controlar você."
+      </blockquote>
+      <div class="estatisticas resultado-stats">
+        <div class="stat">
+          <span id="campanha-acertos">0</span>
+          <label>ACERTOS</label>
+        </div>
+        <div class="stat">
+          <span id="campanha-tempo-restante">0</span>
+          <label>TEMPO REST.</label>
+        </div>
+        <div class="stat">
+          <span id="campanha-score">0</span>
+          <label>SCORE</label>
+        </div>
+      </div>
+      <div class="input-nome">
+        <label for="nome-campanha">DIGITE SEU CODINOME:</label>
+        <input type="text" id="nome-campanha" maxlength="20" placeholder="Hacker_001">
+      </div>
+      <button type="button" id="btn-salvar-campanha" class="btn-principal">SALVAR NO PÓDIO</button>
+      <button type="button" id="btn-campanha-menu" class="btn-secundario">VOLTAR AO MENU</button>
+    </section>
+
+    <!-- Game Over Trace -->
+    <section id="tela-trace-gameover" class="tela tela-campanha">
+      <p class="resultado-rank rank-baixo">TRACE DETECTED</p>
+      <h2 class="titulo-trace">SISTEMA RASTREANDO</h2>
+      <p class="narrativa-fase">O trace te encontrou. Sua conexão foi comprometida.</p>
+      <button type="button" id="btn-trace-reiniciar" class="btn-principal">REINICIAR CAMPANHA</button>
+      <button type="button" id="btn-trace-menu" class="btn-secundario">VOLTAR AO MENU</button>
+    </section>
+
     <!-- Tela do Pódio -->
     <section id="tela-podium" class="tela">
       <h2 class="titulo-podium">// PÓDIO DOS HACKERS</h2>
-      <div class="podium-container" id="lista-podium">
-        <!-- Lista será preenchida via JS -->
-      </div>
+      <div class="podium-container" id="lista-podium"></div>
       <button id="btn-voltar" class="btn-secundario"><< VOLTAR</button>
     </section>
   </main>
@@ -167,6 +263,8 @@
     <span class="cursor">_</span>
   </footer>
 
+  <script src="maze/fases-config.js"></script>
+  <script src="maze/engine.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

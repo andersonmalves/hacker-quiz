@@ -417,7 +417,25 @@ const estado = {
   tempoInicio: null,
   tempoFim: null,
   acertos: 0,
-  processando: false
+  processando: false,
+  modoJogo: null
+};
+
+const campanhaEstado = {
+  modo: null,
+  faseAtual: 1,
+  acertos: 0,
+  tempoRestante: typeof CAMPANHA_CONFIG !== 'undefined'
+    ? CAMPANHA_CONFIG.tempoInicialSegundos
+    : 900,
+  atencao: typeof CAMPANHA_CONFIG !== 'undefined'
+    ? CAMPANHA_CONFIG.atencaoInicial
+    : 100,
+  timerInterval: null,
+  faseSpawn: { x: 0, y: 0 },
+  voltarParaMaze: false,
+  distractionIndex: 0,
+  scoreFinal: 0
 };
 
 const prefersReducedMotion = () =>
@@ -1168,12 +1186,17 @@ const audioManager = {
 const elementos = {
   telas: {
     inicial: document.getElementById('tela-inicial'),
+    briefing: document.getElementById('tela-briefing'),
+    maze: document.getElementById('tela-maze'),
     quiz: document.getElementById('tela-quiz'),
     resultado: document.getElementById('tela-resultado'),
+    finalCampanha: document.getElementById('tela-final-campanha'),
+    traceGameover: document.getElementById('tela-trace-gameover'),
     podium: document.getElementById('tela-podium')
   },
   botoes: {
-    iniciar: document.getElementById('btn-iniciar'),
+    jogarCampanha: document.getElementById('btn-jogar-campanha'),
+    quizClassico: document.getElementById('btn-quiz-classico'),
     verPodium: document.getElementById('btn-podium'),
     confirmar: document.getElementById('btn-confirmar'),
     proxima: document.getElementById('btn-proxima'),
@@ -1181,7 +1204,37 @@ const elementos = {
     salvar: document.getElementById('btn-salvar'),
     jogarNovamente: document.getElementById('btn-jogar-novamente'),
     voltar: document.getElementById('btn-voltar'),
-    mute: document.getElementById('btn-mute')
+    mute: document.getElementById('btn-mute'),
+    briefingContinuar: document.getElementById('btn-briefing-continuar'),
+    briefingDesistir: document.getElementById('btn-briefing-desistir'),
+    mazeDesistir: document.getElementById('btn-maze-desistir'),
+    fecharDistraction: document.getElementById('btn-fechar-distraction'),
+    traceReiniciar: document.getElementById('btn-trace-reiniciar'),
+    traceMenu: document.getElementById('btn-trace-menu'),
+    salvarCampanha: document.getElementById('btn-salvar-campanha'),
+    campanhaMenu: document.getElementById('btn-campanha-menu')
+  },
+  campanha: {
+    briefingFaseNum: document.getElementById('briefing-fase-num'),
+    briefingTimer: document.getElementById('briefing-timer'),
+    briefingAtencaoFill: document.getElementById('briefing-atencao-fill'),
+    briefingTitulo: document.getElementById('briefing-titulo'),
+    briefingNarrativa: document.getElementById('briefing-narrativa'),
+    mazeFaseNum: document.getElementById('maze-fase-num'),
+    mazeTimer: document.getElementById('maze-timer'),
+    mazeTimerWrap: document.getElementById('maze-timer-wrap'),
+    mazeAtencaoFill: document.getElementById('maze-atencao-fill'),
+    mazeCanvas: document.getElementById('maze-canvas'),
+    campanhaAcertos: document.getElementById('campanha-acertos'),
+    campanhaTempoRestante: document.getElementById('campanha-tempo-restante'),
+    campanhaScore: document.getElementById('campanha-score'),
+    nomeCampanha: document.getElementById('nome-campanha'),
+    distractionOverlay: document.getElementById('distraction-overlay'),
+    distractionTipo: document.getElementById('distraction-tipo'),
+    distractionTitulo: document.getElementById('distraction-titulo'),
+    cutsceneOverlay: document.getElementById('cutscene-overlay'),
+    cutsceneScroll: document.getElementById('cutscene-scroll'),
+    cutsceneGlitch: document.getElementById('cutscene-glitch')
   },
   quiz: {
     numPergunta: document.getElementById('num-pergunta'),
@@ -1312,6 +1365,7 @@ const utils = {
   },
 
   atualizarContadorPerguntas: () => {
+    if (campanhaEstado.modo === 'checkpoint') return;
     const total = estado.perguntasSorteadas.length || CONFIG.perguntasPorJogo;
     if (elementos.quiz.totalPerguntas) {
       elementos.quiz.totalPerguntas.textContent = utils.formatarNumero(total);
@@ -1427,6 +1481,421 @@ const podiumManager = {
   }
 };
 
+const progressoCampanha = {
+  salvar: () => {
+    try {
+      localStorage.setItem(CAMPANHA_CONFIG.storageKey, JSON.stringify({
+        faseAtual: campanhaEstado.faseAtual,
+        acertos: campanhaEstado.acertos,
+        tempoRestante: campanhaEstado.tempoRestante,
+        atencao: campanhaEstado.atencao
+      }));
+    } catch (e) {
+      console.error('Erro ao salvar progresso da campanha:', e);
+    }
+  },
+
+  carregar: () => {
+    try {
+      const dados = localStorage.getItem(CAMPANHA_CONFIG.storageKey);
+      if (!dados) return null;
+      const parsed = JSON.parse(dados);
+      const fase = Number(parsed.faseAtual);
+      if (fase < 1 || fase > CAMPANHA_CONFIG.totalFases) return null;
+      return {
+        faseAtual: fase,
+        acertos: Math.max(0, Number(parsed.acertos) || 0),
+        tempoRestante: Math.max(0, Number(parsed.tempoRestante) || CAMPANHA_CONFIG.tempoInicialSegundos),
+        atencao: Math.min(100, Math.max(0, Number(parsed.atencao) || CAMPANHA_CONFIG.atencaoInicial))
+      };
+    } catch (e) {
+      return null;
+    }
+  },
+
+  limpar: () => {
+    try {
+      localStorage.removeItem(CAMPANHA_CONFIG.storageKey);
+    } catch (e) {
+      console.error('Erro ao limpar progresso da campanha:', e);
+    }
+  }
+};
+
+const campanhaUtils = {
+  formatarTimer: (segundos) => {
+    const m = Math.floor(segundos / 60);
+    const s = segundos % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  },
+
+  getFaseConfig: (id) => FASES_CAMPANHA.find((f) => f.id === id),
+
+  getPerguntaPorId: (id) => poolPerguntas.find((p) => p.id === id)
+};
+
+const campaignManager = {
+  iniciar: async (restaurar = true) => {
+    MazeEngine.stop();
+    campaignManager.pararTimer();
+
+    const salvo = restaurar ? progressoCampanha.carregar() : null;
+    if (salvo) {
+      campanhaEstado.faseAtual = salvo.faseAtual;
+      campanhaEstado.acertos = salvo.acertos;
+      campanhaEstado.tempoRestante = salvo.tempoRestante;
+      campanhaEstado.atencao = salvo.atencao;
+    } else {
+      progressoCampanha.limpar();
+      campanhaEstado.faseAtual = 1;
+      campanhaEstado.acertos = 0;
+      campanhaEstado.tempoRestante = CAMPANHA_CONFIG.tempoInicialSegundos;
+      campanhaEstado.atencao = CAMPANHA_CONFIG.atencaoInicial;
+    }
+
+    campanhaEstado.modo = 'campanha';
+    campanhaEstado.voltarParaMaze = false;
+    campanhaEstado.distractionIndex = 0;
+    estado.modoJogo = 'campanha';
+
+    campaignManager.iniciarTimer();
+    campaignManager.entrarFase(campanhaEstado.faseAtual);
+    console.info('campanha_iniciada', { fase: campanhaEstado.faseAtual });
+  },
+
+  iniciarTimer: () => {
+    campaignManager.pararTimer();
+    campanhaEstado.timerInterval = setInterval(() => {
+      campaignManager.tickTimer();
+    }, 1000);
+  },
+
+  pararTimer: () => {
+    if (campanhaEstado.timerInterval) {
+      clearInterval(campanhaEstado.timerInterval);
+      campanhaEstado.timerInterval = null;
+    }
+  },
+
+  tickTimer: () => {
+    if (campanhaEstado.modo === null || campanhaEstado.modo === 'classico') return;
+
+    let decremento = 1;
+    if (campanhaEstado.atencao < CAMPANHA_CONFIG.atencaoMinimaAceleracao) {
+      decremento = 2;
+    }
+    campanhaEstado.tempoRestante = Math.max(0, campanhaEstado.tempoRestante - decremento);
+    campaignManager.atualizarHud();
+
+    if (campanhaEstado.tempoRestante <= CAMPANHA_CONFIG.traceAlertaSegundos) {
+      if (elementos.campanha.mazeTimerWrap) {
+        elementos.campanha.mazeTimerWrap.classList.add('timer-alerta');
+      }
+    }
+
+    if (campanhaEstado.tempoRestante <= 0) {
+      campaignManager.gameOverTrace();
+    }
+
+    progressoCampanha.salvar();
+  },
+
+  atualizarHud: () => {
+    const timerTexto = campanhaUtils.formatarTimer(campanhaEstado.tempoRestante);
+    const faseTexto = utils.formatarNumero(campanhaEstado.faseAtual);
+
+    if (elementos.campanha.briefingFaseNum) {
+      elementos.campanha.briefingFaseNum.textContent = faseTexto;
+    }
+    if (elementos.campanha.briefingTimer) {
+      elementos.campanha.briefingTimer.textContent = timerTexto;
+    }
+    if (elementos.campanha.mazeFaseNum) {
+      elementos.campanha.mazeFaseNum.textContent = faseTexto;
+    }
+    if (elementos.campanha.mazeTimer) {
+      elementos.campanha.mazeTimer.textContent = timerTexto;
+    }
+
+    [elementos.campanha.briefingAtencaoFill, elementos.campanha.mazeAtencaoFill].forEach((el) => {
+      if (!el) return;
+      el.style.width = `${campanhaEstado.atencao}%`;
+      el.classList.toggle('baixa', campanhaEstado.atencao < CAMPANHA_CONFIG.atencaoMinimaAceleracao);
+    });
+  },
+
+  entrarFase: (id) => {
+    const fase = campanhaUtils.getFaseConfig(id);
+    if (!fase) return;
+
+    campanhaEstado.modo = 'campanha';
+    campanhaEstado.faseAtual = id;
+    campanhaEstado.distractionIndex = 0;
+    campaignManager.atualizarHud();
+
+    if (elementos.campanha.briefingTitulo) {
+      elementos.campanha.briefingTitulo.textContent = fase.titulo;
+    }
+    if (elementos.campanha.briefingNarrativa) {
+      elementos.campanha.briefingNarrativa.textContent = fase.narrativa;
+    }
+
+    utils.trocarTela('briefing');
+    progressoCampanha.salvar();
+  },
+
+  briefingContinuar: () => {
+    const fase = campanhaUtils.getFaseConfig(campanhaEstado.faseAtual);
+    if (!fase) return;
+
+    if (fase.jogavel) {
+      campaignManager.iniciarLabirinto(fase);
+      return;
+    }
+
+    if (fase.cutscene) {
+      campaignManager.mostrarCutscene(fase.cutscene, () => {
+        campaignManager.abrirCheckpoint(fase.perguntaId, false);
+      });
+      return;
+    }
+
+    campaignManager.abrirCheckpoint(fase.perguntaId, false);
+  },
+
+  iniciarLabirinto: (fase) => {
+    campanhaEstado.modo = 'campanha';
+    campanhaEstado.voltarParaMaze = true;
+    utils.trocarTela('maze');
+
+    const spawnInfo = MazeEngine.start({
+      canvas: elementos.campanha.mazeCanvas,
+      tilemap: BASE_TILEMAP,
+      onExit: () => campaignManager.onMazeExit(fase),
+      onDistraction: (pos) => campaignManager.onMazeDistraction(fase, pos)
+    });
+
+    campanhaEstado.faseSpawn = { x: spawnInfo.spawnX, y: spawnInfo.spawnY };
+    campaignManager.atualizarHud();
+  },
+
+  onMazeExit: (fase) => {
+    MazeEngine.stop();
+    campaignManager.abrirCheckpoint(fase.perguntaId, true);
+  },
+
+  onMazeDistraction: (fase, pos) => {
+    const lista = fase.distractions || [];
+    let config = lista.find(
+      (d) => d.triggerTile && d.triggerTile.x === pos.x && d.triggerTile.y === pos.y
+    );
+    if (!config && campanhaEstado.distractionIndex < lista.length) {
+      config = lista[campanhaEstado.distractionIndex];
+      campanhaEstado.distractionIndex += 1;
+    }
+    if (config) campaignManager.mostrarDistraction(config);
+  },
+
+  mostrarDistraction: (config) => {
+    MazeEngine.stop();
+    const tipoLabel = config.tipo === 'notification' ? 'NOTIFICAÇÃO' : 'POP-UP';
+    if (elementos.campanha.distractionTipo) {
+      elementos.campanha.distractionTipo.textContent = tipoLabel;
+    }
+    if (elementos.campanha.distractionTitulo) {
+      elementos.campanha.distractionTitulo.textContent = config.titulo;
+    }
+    if (elementos.campanha.distractionOverlay) {
+      elementos.campanha.distractionOverlay.hidden = false;
+      elementos.campanha.distractionOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    campanhaEstado.atencao = Math.max(
+      0,
+      campanhaEstado.atencao - (config.atencaoDelta || 10)
+    );
+    campaignManager.atualizarHud();
+    progressoCampanha.salvar();
+  },
+
+  fecharDistraction: () => {
+    if (elementos.campanha.distractionOverlay) {
+      elementos.campanha.distractionOverlay.hidden = true;
+      elementos.campanha.distractionOverlay.setAttribute('aria-hidden', 'true');
+    }
+
+    campanhaEstado.atencao = Math.min(100, campanhaEstado.atencao + 5);
+    campaignManager.atualizarHud();
+
+    const fase = campanhaUtils.getFaseConfig(campanhaEstado.faseAtual);
+    if (fase && fase.jogavel) {
+      campaignManager.iniciarLabirinto(fase);
+    }
+  },
+
+  mostrarCutscene: (tipo, callback) => {
+    const overlay = elementos.campanha.cutsceneOverlay;
+    const scroll = elementos.campanha.cutsceneScroll;
+    const glitch = elementos.campanha.cutsceneGlitch;
+    if (!overlay) {
+      callback();
+      return;
+    }
+
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    if (scroll) scroll.hidden = tipo !== 'scroll';
+    if (glitch) glitch.hidden = tipo !== 'glitch';
+
+    setTimeout(() => {
+      overlay.hidden = true;
+      overlay.setAttribute('aria-hidden', 'true');
+      if (scroll) scroll.hidden = true;
+      if (glitch) glitch.hidden = true;
+      callback();
+    }, prefersReducedMotion() ? 500 : 3000);
+  },
+
+  abrirCheckpoint: async (perguntaId, veioDoMaze) => {
+    const pergunta = campanhaUtils.getPerguntaPorId(perguntaId);
+    if (!pergunta) return;
+
+    campanhaEstado.modo = 'checkpoint';
+    campanhaEstado.voltarParaMaze = Boolean(veioDoMaze);
+    estado.modoJogo = 'campanha';
+    estado.perguntasSorteadas = [pergunta];
+    estado.perguntaAtual = 0;
+    estado.respostas = [];
+    estado.respostaSelecionada = null;
+    estado.processando = false;
+
+    elementos.botoes.confirmar.classList.remove('oculto');
+    elementos.botoes.proxima.classList.add('oculto');
+    elementos.quiz.feedback.classList.remove('visivel', 'acerto', 'erro');
+
+    utils.trocarTela('quiz');
+    await quizManager.renderizarPergunta(true);
+  },
+
+  handleCheckpointProxima: () => {
+    const ultima = estado.respostas[estado.respostas.length - 1];
+    if (!ultima) return;
+    campaignManager.confirmarCheckpoint(ultima.acertou);
+  },
+
+  confirmarCheckpoint: (acertou) => {
+    if (acertou) {
+      campanhaEstado.acertos += 1;
+      console.info('fase_concluida', { fase: campanhaEstado.faseAtual });
+
+      if (campanhaEstado.faseAtual >= CAMPANHA_CONFIG.totalFases) {
+        campaignManager.finalizarCampanha();
+        return;
+      }
+
+      campanhaEstado.faseAtual += 1;
+      progressoCampanha.salvar();
+      resetarEstadoQuiz();
+      campaignManager.entrarFase(campanhaEstado.faseAtual);
+      return;
+    }
+
+    console.info('checkpoint_erro', { fase: campanhaEstado.faseAtual });
+    campaignManager.aplicarPenalidadeErro();
+  },
+
+  aplicarPenalidadeErro: () => {
+    campanhaEstado.tempoRestante = Math.max(
+      0,
+      campanhaEstado.tempoRestante - CAMPANHA_CONFIG.penalidadeErroSegundos
+    );
+    campaignManager.atualizarHud();
+    progressoCampanha.salvar();
+
+    if (campanhaEstado.tempoRestante <= 0) {
+      campaignManager.gameOverTrace();
+      return;
+    }
+
+    const fase = campanhaUtils.getFaseConfig(campanhaEstado.faseAtual);
+    resetarEstadoQuiz();
+
+    if (campanhaEstado.voltarParaMaze && fase && fase.jogavel) {
+      campaignManager.iniciarLabirinto(fase);
+      return;
+    }
+
+    if (fase) {
+      campaignManager.abrirCheckpoint(fase.perguntaId, campanhaEstado.voltarParaMaze);
+    }
+  },
+
+  finalizarCampanha: () => {
+    campaignManager.pararTimer();
+    MazeEngine.stop();
+    progressoCampanha.limpar();
+
+    campanhaEstado.scoreFinal =
+      campanhaEstado.acertos * CONFIG.pontosPorAcerto + campanhaEstado.tempoRestante;
+    campanhaEstado.modo = null;
+    estado.modoJogo = null;
+
+    if (elementos.campanha.campanhaAcertos) {
+      elementos.campanha.campanhaAcertos.textContent =
+        `${campanhaEstado.acertos}/${CAMPANHA_CONFIG.totalFases}`;
+    }
+    if (elementos.campanha.campanhaTempoRestante) {
+      elementos.campanha.campanhaTempoRestante.textContent =
+        campanhaUtils.formatarTimer(campanhaEstado.tempoRestante);
+    }
+    if (elementos.campanha.campanhaScore) {
+      elementos.campanha.campanhaScore.textContent = String(campanhaEstado.scoreFinal);
+    }
+    if (elementos.campanha.nomeCampanha) {
+      elementos.campanha.nomeCampanha.value = '';
+    }
+
+    resetarEstadoQuiz();
+    utils.trocarTela('finalCampanha');
+    sfxManager.playComplete();
+  },
+
+  gameOverTrace: () => {
+    console.info('timer_esgotado');
+    campaignManager.pararTimer();
+    MazeEngine.stop();
+    campanhaEstado.modo = null;
+    estado.modoJogo = null;
+    resetarEstadoQuiz();
+    utils.trocarTela('traceGameover');
+    sfxManager.playErro();
+  },
+
+  desistir: () => {
+    campaignManager.pararTimer();
+    MazeEngine.stop();
+    campanhaEstado.modo = null;
+    estado.modoJogo = null;
+    resetarEstadoQuiz();
+    utils.trocarTela('inicial');
+  },
+
+  reiniciar: async () => {
+    await campaignManager.iniciar(false);
+  },
+
+  voltarMenu: () => {
+    campaignManager.desistir();
+  },
+
+  salvarPodium: () => {
+    const nome = utils.sanitizarNome(elementos.campanha.nomeCampanha.value);
+    const tempoUsado = CAMPANHA_CONFIG.tempoInicialSegundos - campanhaEstado.tempoRestante;
+    podiumManager.salvar(nome, campanhaEstado.scoreFinal, tempoUsado);
+    podiumRenderer.mostrar();
+  }
+};
+
 const resetarEstadoQuiz = () => {
   estado.perguntasSorteadas = [];
   estado.perguntaAtual = 0;
@@ -1461,6 +1930,11 @@ const resetarEstadoQuiz = () => {
 // Lógica do Quiz
 const quizManager = {
   iniciar: async () => {
+    campaignManager.pararTimer();
+    MazeEngine.stop();
+    campanhaEstado.modo = 'classico';
+    estado.modoJogo = 'classico';
+
     const excluirIds = partidaMemory.getUltimaPartidaIds();
     estado.perguntasSorteadas = utils.sortearPerguntasEstratificado(
       poolPerguntas,
@@ -1495,11 +1969,23 @@ const quizManager = {
     estado.alternativasExibidas = embaralhado.alternativas;
     estado.corretaExibida = embaralhado.correta;
 
-    elementos.quiz.numPergunta.textContent = utils.formatarNumero(estado.perguntaAtual + 1);
+    if (campanhaEstado.modo === 'checkpoint') {
+      elementos.quiz.numPergunta.textContent = utils.formatarNumero(campanhaEstado.faseAtual);
+      if (elementos.quiz.totalPerguntas) {
+        elementos.quiz.totalPerguntas.textContent = utils.formatarNumero(CAMPANHA_CONFIG.totalFases);
+      }
+    } else {
+      elementos.quiz.numPergunta.textContent = utils.formatarNumero(estado.perguntaAtual + 1);
+    }
     elementos.quiz.scoreAtual.textContent = utils.formatarNumero(estado.pontuacao, 4);
     utils.atualizarContadorPerguntas();
 
-    progressBar.atualizar(estado.perguntaAtual, estado.perguntasSorteadas.length);
+    if (campanhaEstado.modo !== 'checkpoint') {
+      progressBar.atualizar(estado.perguntaAtual, estado.perguntasSorteadas.length);
+    } else if (elementos.quiz.barraProgresso) {
+      const pct = (campanhaEstado.faseAtual / CAMPANHA_CONFIG.totalFases) * 100;
+      elementos.quiz.barraProgresso.style.width = `${pct}%`;
+    }
 
     elementos.quiz.categoria.textContent = pergunta.categoria.toUpperCase();
     elementos.quiz.texto.textContent = comTyping ? '' : pergunta.pergunta;
@@ -1617,6 +2103,14 @@ const quizManager = {
   proximaPergunta: async () => {
     if (estado.processando) return;
 
+    if (campanhaEstado.modo === 'checkpoint') {
+      estado.processando = true;
+      elementos.botoes.proxima.disabled = true;
+      campaignManager.handleCheckpointProxima();
+      estado.processando = false;
+      return;
+    }
+
     estado.processando = true;
     elementos.botoes.proxima.disabled = true;
 
@@ -1645,6 +2139,12 @@ const quizManager = {
 
   desistir: async () => {
     if (estado.processando) return;
+
+    if (campanhaEstado.modo === 'checkpoint') {
+      campaignManager.desistir();
+      audioManager.parar();
+      return;
+    }
 
     typingEffect.cancelled = true;
     estado.processando = true;
@@ -1759,16 +2259,98 @@ document.addEventListener('DOMContentLoaded', () => {
   audioManager.init();
 
   // Tela inicial
-  elementos.botoes.iniciar.addEventListener('click', async () => {
-    try {
-      await quizManager.iniciar();
-      await audioManager.iniciar();
-    } catch (e) {
-      console.error('Erro ao iniciar quiz ou áudio:', e);
-      // Continua mesmo sem áudio
-    }
-  });
+  if (elementos.botoes.jogarCampanha) {
+    elementos.botoes.jogarCampanha.addEventListener('click', async () => {
+      try {
+        await campaignManager.iniciar(true);
+        await audioManager.iniciar();
+      } catch (e) {
+        console.error('Erro ao iniciar campanha:', e);
+      }
+    });
+  }
+
+  if (elementos.botoes.quizClassico) {
+    elementos.botoes.quizClassico.addEventListener('click', async () => {
+      try {
+        await quizManager.iniciar();
+        await audioManager.iniciar();
+      } catch (e) {
+        console.error('Erro ao iniciar quiz ou áudio:', e);
+      }
+    });
+  }
+
   elementos.botoes.verPodium.addEventListener('click', podiumRenderer.mostrar);
+
+  if (elementos.botoes.briefingContinuar) {
+    elementos.botoes.briefingContinuar.addEventListener('click', () => {
+      campaignManager.briefingContinuar();
+    });
+  }
+
+  if (elementos.botoes.briefingDesistir) {
+    elementos.botoes.briefingDesistir.addEventListener('click', () => {
+      campaignManager.desistir();
+      audioManager.parar();
+    });
+  }
+
+  if (elementos.botoes.mazeDesistir) {
+    elementos.botoes.mazeDesistir.addEventListener('click', () => {
+      campaignManager.desistir();
+      audioManager.parar();
+    });
+  }
+
+  if (elementos.botoes.fecharDistraction) {
+    elementos.botoes.fecharDistraction.addEventListener('click', () => {
+      campaignManager.fecharDistraction();
+    });
+  }
+
+  document.querySelectorAll('.dpad-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const dir = btn.dataset.dir;
+      const map = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+      const move = map[dir];
+      if (move) MazeEngine.move(move[0], move[1]);
+    });
+  });
+
+  if (elementos.botoes.traceReiniciar) {
+    elementos.botoes.traceReiniciar.addEventListener('click', async () => {
+      await campaignManager.reiniciar();
+      await audioManager.iniciar();
+    });
+  }
+
+  if (elementos.botoes.traceMenu) {
+    elementos.botoes.traceMenu.addEventListener('click', () => {
+      progressoCampanha.limpar();
+      campaignManager.voltarMenu();
+      audioManager.parar();
+    });
+  }
+
+  if (elementos.botoes.salvarCampanha) {
+    elementos.botoes.salvarCampanha.addEventListener('click', () => {
+      campaignManager.salvarPodium();
+    });
+  }
+
+  if (elementos.botoes.campanhaMenu) {
+    elementos.botoes.campanhaMenu.addEventListener('click', () => {
+      campaignManager.voltarMenu();
+      audioManager.parar();
+    });
+  }
+
+  if (elementos.campanha.nomeCampanha) {
+    elementos.campanha.nomeCampanha.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') elementos.botoes.salvarCampanha.click();
+    });
+  }
 
   // Botão de mute - usa arrow function para preservar contexto
   if (elementos.botoes.mute) {
@@ -1832,18 +2414,22 @@ document.addEventListener('keydown', (e) => {
 });
 
 // Console easter egg
-console.log('%c HACKER QUIZ ', 'background: #00ff41; color: #0a0a0a; font-size: 24px; font-weight: bold;');
-console.log('%c> Carreira de Engenharia de Software Edition', 'color: #00ff41; font-size: 14px;');
-console.log('%c> 30 perguntas no pool, 10 sorteadas por partida', 'color: #008f11; font-size: 12px;');
+console.log('%c CYBER MAZE ', 'background: #7b2fff; color: #0a0a0a; font-size: 24px; font-weight: bold;');
+console.log('%c> Escape da Internet + Quiz Clássico', 'color: #00ff41; font-size: 14px;');
 console.log('%c> Digite help() para comandos disponíveis', 'color: #008f11; font-size: 12px;');
 
 window.help = () => {
   console.log('%cComandos disponíveis:', 'color: #00ff41;');
   console.log('  podium.limpar() - Limpa o pódio');
   console.log('  podium.get() - Mostra o pódio atual');
+  console.log('  campanha.limpar() - Limpa progresso da campanha');
   console.log('  estado - Mostra o estado atual do jogo');
   console.log('  poolPerguntas - Lista todas as 30 perguntas disponíveis');
-  return 'Hacker Quiz v2.0 - Carreira Edition';
+  return 'Cyber Maze v1.0';
+};
+
+window.campanha = {
+  limpar: progressoCampanha.limpar
 };
 
 window.podium = {

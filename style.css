@@ -10,6 +10,10 @@
   --error: #ff0040;
   --error-glow: rgba(255, 0, 64, 0.3);
   --warning: #ffaa00;
+  --accent-blue: #00d4ff;
+  --accent-purple: #7b2fff;
+  --accent-blue-glow: rgba(0, 212, 255, 0.3);
+  --accent-purple-glow: rgba(123, 47, 255, 0.3);
   --font-mono: 'JetBrains Mono', 'Courier New', monospace;
   --font-display: 'Share Tech Mono', 'JetBrains Mono', monospace;
 }
@@ -1242,5 +1246,299 @@ body {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+
+  .cutscene-scroll .scroll-feed,
+  .distraction-modal {
+    animation: none !important;
+  }
+}
+
+/* === Cyber Maze — Campanha === */
+
+.mensagem-inicial {
+  text-align: center;
+  color: var(--accent-blue);
+  font-size: 0.95rem;
+  margin-bottom: 20px;
+  max-width: 420px;
+  line-height: 1.5;
+}
+
+.tela-campanha {
+  max-width: 520px;
+  width: 100%;
+}
+
+.hud-campanha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--text-secondary);
+  border-radius: 4px;
+  margin-bottom: 20px;
+  font-size: 0.85rem;
+}
+
+.hud-item {
+  color: var(--text-secondary);
+}
+
+.hud-item span {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.hud-timer.timer-alerta span {
+  color: var(--error);
+  animation: blink-timer 1s step-end infinite;
+}
+
+@keyframes blink-timer {
+  50% { opacity: 0.4; }
+}
+
+.hud-atencao {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.barra-atencao {
+  height: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--text-secondary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.barra-atencao-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue), var(--accent));
+  transition: width 0.3s ease;
+}
+
+.barra-atencao-fill.baixa {
+  background: var(--error);
+}
+
+.titulo-fase {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--accent-purple);
+  text-align: center;
+  margin-bottom: 16px;
+  text-shadow: 0 0 10px var(--accent-purple-glow);
+}
+
+.narrativa-fase {
+  text-align: center;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 24px;
+  padding: 0 8px;
+}
+
+.btn-desistir-campanha {
+  margin-top: 16px;
+}
+
+.maze-hint {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.maze-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+  border: 2px solid var(--accent-purple);
+  box-shadow: 0 0 20px var(--accent-purple-glow);
+  border-radius: 4px;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+#maze-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.dpad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.dpad-row {
+  display: flex;
+  gap: 4px;
+}
+
+.dpad-btn {
+  width: 52px;
+  height: 52px;
+  font-size: 1.2rem;
+  background: var(--bg-card);
+  border: 1px solid var(--accent-blue);
+  color: var(--accent-blue);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  touch-action: manipulation;
+}
+
+.dpad-btn:active {
+  background: var(--accent-blue);
+  color: var(--bg-primary);
+}
+
+.distraction-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.distraction-overlay[hidden] {
+  display: none;
+}
+
+.distraction-modal {
+  background: var(--bg-card);
+  border: 2px solid var(--error);
+  padding: 24px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 0 30px var(--error-glow);
+  animation: popup-shake 0.4s ease;
+}
+
+@keyframes popup-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+.distraction-tipo {
+  font-size: 0.75rem;
+  color: var(--error);
+  margin-bottom: 8px;
+}
+
+.distraction-titulo {
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+
+.btn-fechar-distraction {
+  width: 100%;
+}
+
+.cutscene-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cutscene-overlay[hidden] {
+  display: none;
+}
+
+.cutscene-scroll {
+  width: 100%;
+  max-width: 320px;
+  height: 70vh;
+  overflow: hidden;
+  border: 1px solid var(--accent-blue);
+}
+
+.scroll-feed {
+  animation: scroll-infinito 3s linear forwards;
+  padding: 20px;
+}
+
+.scroll-feed p {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--bg-card);
+  color: var(--text-secondary);
+}
+
+@keyframes scroll-infinito {
+  from { transform: translateY(0); }
+  to { transform: translateY(-60%); }
+}
+
+.cutscene-glitch {
+  text-align: center;
+}
+
+.cutscene-glitch .glitch {
+  font-size: 2rem;
+  color: var(--error);
+}
+
+.tela-final-campanha {
+  text-align: center;
+}
+
+.titulo-final {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  color: var(--accent);
+  margin-bottom: 20px;
+}
+
+.mensagem-final-educativa {
+  font-size: 1.1rem;
+  color: var(--accent-blue);
+  border-left: 3px solid var(--accent-purple);
+  padding: 16px 20px;
+  margin: 0 auto 24px;
+  max-width: 400px;
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.titulo-trace {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  color: var(--error);
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+#tela-trace-gameover .narrativa-fase {
+  margin-bottom: 24px;
+}
+
+@media (min-width: 600px) {
+  .container:has(.tela-campanha.ativa) {
+    max-width: 560px;
   }
 }
