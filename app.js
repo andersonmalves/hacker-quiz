@@ -1204,8 +1204,6 @@ const elementos = {
     verPodium: document.getElementById('btn-podium'),
     continuarCampanha: document.getElementById('btn-continuar-campanha'),
     novaCampanha: document.getElementById('btn-nova-campanha'),
-    quizResumo: document.getElementById('btn-quiz-resumo'),
-    podiumResumo: document.getElementById('btn-podium-resumo'),
     confirmar: document.getElementById('btn-confirmar'),
     proxima: document.getElementById('btn-proxima'),
     desistir: document.getElementById('btn-desistir'),
@@ -1248,7 +1246,7 @@ const elementos = {
     progressoResumo: document.getElementById('campanha-progresso-resumo'),
     resumoFase: document.getElementById('resumo-fase'),
     resumoTimer: document.getElementById('resumo-timer'),
-    acoesInicioPadrao: document.getElementById('acoes-inicio-padrao')
+    acoesInicio: document.getElementById('acoes-inicio')
   },
   quiz: {
     numPergunta: document.getElementById('num-pergunta'),
@@ -1561,15 +1559,12 @@ const campanhaUI = {
     const modoCampanha = campanhaUI.campanhaHabilitada();
     const quizClassico = campanhaUI.quizClassicoHabilitado();
 
-    if (elementos.botoes.jogarCampanha) {
-      elementos.botoes.jogarCampanha.hidden = !modoCampanha;
-    }
-
     document.querySelectorAll('.campanha-only').forEach((el) => {
+      if (el.id === 'campanha-progresso-resumo') return;
       el.hidden = !modoCampanha;
     });
 
-    [elementos.botoes.quizClassico, elementos.botoes.quizResumo].forEach((btn) => {
+    [elementos.botoes.quizClassico].forEach((btn) => {
       if (!btn) return;
       btn.hidden = !quizClassico;
     });
@@ -1583,38 +1578,37 @@ const campanhaUI = {
     if (!modoCampanha && elementos.campanha.progressoResumo) {
       elementos.campanha.progressoResumo.hidden = true;
     }
-    if (elementos.campanha.acoesInicioPadrao) {
-      elementos.campanha.acoesInicioPadrao.hidden = false;
-    }
+
+    campanhaUI.atualizarMenuProgresso();
   },
 
   atualizarMenuProgresso: () => {
     const resumo = elementos.campanha.progressoResumo;
-    const acoes = elementos.campanha.acoesInicioPadrao;
+    const modoCampanha = campanhaUI.campanhaHabilitada();
+    const salvo = modoCampanha ? progressoCampanha.carregar() : null;
+    const temProgresso = Boolean(salvo);
 
-    if (!campanhaUI.campanhaHabilitada()) {
-      if (resumo) resumo.hidden = true;
-      if (acoes) acoes.hidden = false;
-      return;
+    if (temProgresso && resumo) {
+      if (elementos.campanha.resumoFase) {
+        elementos.campanha.resumoFase.textContent = utils.formatarNumero(salvo.faseAtual);
+      }
+      if (elementos.campanha.resumoTimer) {
+        elementos.campanha.resumoTimer.textContent = campanhaUtils.formatarTimer(salvo.tempoRestante);
+      }
+      resumo.hidden = false;
+    } else if (resumo) {
+      resumo.hidden = true;
     }
 
-    const salvo = progressoCampanha.carregar();
-
-    if (!salvo || !resumo) {
-      if (resumo) resumo.hidden = true;
-      if (acoes) acoes.hidden = false;
-      return;
+    if (elementos.botoes.continuarCampanha) {
+      elementos.botoes.continuarCampanha.hidden = !modoCampanha || !temProgresso;
     }
-
-    if (elementos.campanha.resumoFase) {
-      elementos.campanha.resumoFase.textContent = utils.formatarNumero(salvo.faseAtual);
+    if (elementos.botoes.novaCampanha) {
+      elementos.botoes.novaCampanha.hidden = !modoCampanha || !temProgresso;
     }
-    if (elementos.campanha.resumoTimer) {
-      elementos.campanha.resumoTimer.textContent = campanhaUtils.formatarTimer(salvo.tempoRestante);
+    if (elementos.botoes.jogarCampanha) {
+      elementos.botoes.jogarCampanha.hidden = !modoCampanha || temProgresso;
     }
-
-    resumo.hidden = false;
-    if (acoes) acoes.hidden = true;
   }
 };
 
@@ -2524,18 +2518,9 @@ document.addEventListener('DOMContentLoaded', () => {
     elementos.botoes.quizClassico.addEventListener('click', iniciarQuizClassico);
   }
 
-  if (elementos.botoes.quizResumo) {
-    elementos.botoes.quizResumo.addEventListener('click', iniciarQuizClassico);
-  }
-
   elementos.botoes.verPodium.addEventListener('click', podiumRenderer.mostrar);
 
-  if (elementos.botoes.podiumResumo) {
-    elementos.botoes.podiumResumo.addEventListener('click', podiumRenderer.mostrar);
-  }
-
   campanhaUI.aplicarFeatureFlags();
-  campanhaUI.atualizarMenuProgresso();
 
   if (elementos.botoes.briefingContinuar) {
     elementos.botoes.briefingContinuar.addEventListener('click', () => {

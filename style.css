@@ -226,13 +226,17 @@ body {
   animation: blink 1s infinite;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 /* Actions Container */
 .actions {
   display: flex;
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  max-width: 300px;
+  max-width: 420px;
 }
 
 .glitch {
