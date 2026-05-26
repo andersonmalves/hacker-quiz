@@ -1517,6 +1517,8 @@ const progressoCampanha = {
       const dados = localStorage.getItem(CAMPANHA_CONFIG.storageKey);
       if (!dados) return null;
       const parsed = JSON.parse(dados);
+      if (Number(parsed.versao) !== CAMPANHA_CONFIG.progressoVersao) return null;
+
       const fase = Number(parsed.faseAtual);
       if (fase < 1 || fase > CAMPANHA_CONFIG.totalFases) return null;
 
@@ -2674,7 +2676,7 @@ window.help = () => {
   console.log('  campanha.limpar() - Limpa progresso da campanha');
   console.log('  estado - Mostra o estado atual do jogo');
   console.log('  poolPerguntas - Lista todas as 30 perguntas disponíveis');
-  return 'Cyber Maze v1.2';
+  return 'Cyber Maze v1.3';
 };
 
 window.campanha = {

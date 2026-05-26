@@ -39,7 +39,7 @@
       activeBtn = btn;
       btn.classList.add('pressed');
       move();
-      repeatInterval = setInterval(move, 130);
+      repeatInterval = setInterval(move, 150);
     };
 
     const end = () => clearRepeat();

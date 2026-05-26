@@ -28,7 +28,7 @@
   let keyHandler = null;
   let fogOfWar = false;
   let moveCooldownMs = 0;
-  let lastKeyboardMoveTime = 0;
+  let lastMoveTime = 0;
 
   const manhattan = (x1, y1, x2, y2) => Math.abs(x1 - x2) + Math.abs(y1 - y2);
 
@@ -156,12 +156,18 @@
     }
   };
 
+  const canMoveNow = () => {
+    if (moveCooldownMs <= 0) return true;
+    return Date.now() - lastMoveTime >= moveCooldownMs;
+  };
+
   const tryMove = (dx, dy) => {
-    if (!running) return;
+    if (!running || !canMoveNow()) return;
     const nx = player.x + dx;
     const ny = player.y + dy;
     if (!isWalkable(nx, ny)) return;
 
+    lastMoveTime = Date.now();
     setPlayerTile(nx, ny);
     checkTriggers(nx, ny);
     render();
@@ -177,13 +183,6 @@
     const dir = map[e.key];
     if (!dir) return;
     e.preventDefault();
-
-    if (moveCooldownMs > 0) {
-      const now = Date.now();
-      if (now - lastKeyboardMoveTime < moveCooldownMs) return;
-      lastKeyboardMoveTime = now;
-    }
-
     tryMove(dir[0], dir[1]);
   };
 
@@ -207,7 +206,7 @@
       tilemap = options.tilemap;
       fogOfWar = Boolean(options.fogOfWar);
       moveCooldownMs = Math.max(0, Number(options.moveCooldownMs) || 0);
-      lastKeyboardMoveTime = 0;
+      lastMoveTime = 0;
       callbacks = {
         onExit: options.onExit || null,
         onDistraction: options.onDistraction || null
