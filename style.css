@@ -1406,6 +1406,11 @@ body {
   margin-bottom: 12px;
 }
 
+.maze-hint-fog {
+  color: var(--accent-purple);
+  font-size: 0.75rem;
+}
+
 .maze-hint-touch {
   display: none;
 }

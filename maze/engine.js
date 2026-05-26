@@ -11,8 +11,11 @@
     exitGlow: 'rgba(123, 47, 255, 0.4)',
     player: '#00ff41',
     playerGlow: 'rgba(0, 255, 65, 0.5)',
-    distraction: '#ffaa00'
+    distraction: '#ffaa00',
+    fog: 'rgba(0, 0, 0, 0.85)'
   };
+
+  const FOG_RADIUS = 3;
 
   let canvas = null;
   let ctx = null;
@@ -23,6 +26,16 @@
   let triggeredDistractions = new Set();
   let callbacks = {};
   let keyHandler = null;
+  let fogOfWar = false;
+  let moveCooldownMs = 0;
+  let lastKeyboardMoveTime = 0;
+
+  const manhattan = (x1, y1, x2, y2) => Math.abs(x1 - x2) + Math.abs(y1 - y2);
+
+  const isTileVisible = (x, y) => {
+    if (!fogOfWar) return true;
+    return manhattan(x, y, player.x, player.y) <= FOG_RADIUS;
+  };
 
   const tileAt = (x, y) => {
     if (!tilemap || y < 0 || y >= tilemap.rows || x < 0 || x >= tilemap.cols) return TILE.WALL;
@@ -50,12 +63,28 @@
     player.py = y * tilemap.tileSize;
   };
 
+  const drawFogOverlay = (px, py, ts) => {
+    ctx.fillStyle = COLORS.fog;
+    ctx.fillRect(px, py, ts, ts);
+  };
+
   const drawTile = (x, y, type) => {
     const ts = tilemap.tileSize;
     const px = x * ts;
     const py = y * ts;
 
-    if (type === TILE.WALL) {
+    if (fogOfWar && !isTileVisible(x, y)) {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(px, py, ts, ts);
+      drawFogOverlay(px, py, ts);
+      return;
+    }
+
+    const hideExit = fogOfWar && type === TILE.EXIT
+      && manhattan(x, y, player.x, player.y) > FOG_RADIUS;
+    const renderType = hideExit ? TILE.FLOOR : type;
+
+    if (renderType === TILE.WALL) {
       ctx.fillStyle = COLORS.wall;
       ctx.fillRect(px, py, ts, ts);
       ctx.strokeStyle = COLORS.wallBorder;
@@ -64,15 +93,15 @@
       return;
     }
 
-    ctx.fillStyle = type === TILE.EXIT ? COLORS.exitGlow : COLORS.floor;
+    ctx.fillStyle = renderType === TILE.EXIT ? COLORS.exitGlow : COLORS.floor;
     ctx.fillRect(px, py, ts, ts);
 
-    if (type === TILE.EXIT) {
+    if (renderType === TILE.EXIT) {
       ctx.fillStyle = COLORS.exit;
       ctx.fillRect(px + 6, py + 6, ts - 12, ts - 12);
     }
 
-    if (type === TILE.DISTRACTION) {
+    if (renderType === TILE.DISTRACTION) {
       ctx.fillStyle = COLORS.distraction;
       ctx.beginPath();
       ctx.arc(px + ts / 2, py + ts / 2, 4, 0, Math.PI * 2);
@@ -148,6 +177,13 @@
     const dir = map[e.key];
     if (!dir) return;
     e.preventDefault();
+
+    if (moveCooldownMs > 0) {
+      const now = Date.now();
+      if (now - lastKeyboardMoveTime < moveCooldownMs) return;
+      lastKeyboardMoveTime = now;
+    }
+
     tryMove(dir[0], dir[1]);
   };
 
@@ -169,6 +205,9 @@
       canvas = options.canvas;
       ctx = canvas.getContext('2d');
       tilemap = options.tilemap;
+      fogOfWar = Boolean(options.fogOfWar);
+      moveCooldownMs = Math.max(0, Number(options.moveCooldownMs) || 0);
+      lastKeyboardMoveTime = 0;
       callbacks = {
         onExit: options.onExit || null,
         onDistraction: options.onDistraction || null

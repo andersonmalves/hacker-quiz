@@ -427,7 +427,7 @@ const campanhaEstado = {
   acertos: 0,
   tempoRestante: typeof CAMPANHA_CONFIG !== 'undefined'
     ? CAMPANHA_CONFIG.tempoInicialSegundos
-    : 900,
+    : 780,
   atencao: typeof CAMPANHA_CONFIG !== 'undefined'
     ? CAMPANHA_CONFIG.atencaoInicial
     : 100,
@@ -435,6 +435,8 @@ const campanhaEstado = {
   faseSpawn: { x: 0, y: 0 },
   voltarParaMaze: false,
   distractionIndex: 0,
+  distractionTimeouts: [],
+  timedDistractionsFired: new Set(),
   scoreFinal: 0,
   fasesConcluidas: [],
   timerPausado: false
@@ -1232,6 +1234,7 @@ const elementos = {
     mazeAtencaoFill: document.getElementById('maze-atencao-fill'),
     mazeCanvas: document.getElementById('maze-canvas'),
     mazeWrap: document.querySelector('.maze-wrap'),
+    mazeHintFog: document.getElementById('maze-hint-fog'),
     campanhaAcertos: document.getElementById('campanha-acertos'),
     campanhaTempoRestante: document.getElementById('campanha-tempo-restante'),
     campanhaScore: document.getElementById('campanha-score'),
@@ -1648,6 +1651,7 @@ const campaignManager = {
 
     MazeEngine.stop();
     MazeDpad.unbind();
+    campaignManager.limparDistractionsTimed();
     campaignManager.pararTimer();
 
     const salvo = restaurar ? progressoCampanha.carregar() : null;
@@ -1669,6 +1673,8 @@ const campaignManager = {
     campanhaEstado.modo = 'campanha';
     campanhaEstado.voltarParaMaze = false;
     campanhaEstado.distractionIndex = 0;
+    campanhaEstado.distractionTimeouts = [];
+    campanhaEstado.timedDistractionsFired = new Set();
     campanhaEstado.timerPausado = false;
     estado.modoJogo = 'campanha';
 
@@ -1757,6 +1763,8 @@ const campaignManager = {
     campanhaEstado.modo = 'campanha';
     campanhaEstado.faseAtual = id;
     campanhaEstado.distractionIndex = 0;
+    campanhaEstado.timedDistractionsFired = new Set();
+    campaignManager.limparDistractionsTimed();
     campaignManager.atualizarHud();
 
     if (elementos.campanha.briefingTitulo) {
@@ -1793,9 +1801,39 @@ const campaignManager = {
     canvas: elementos.campanha.mazeCanvas,
     tilemap: campanhaUtils.getTilemap(fase.tilemapRef || 'base'),
     preserveTriggers,
+    fogOfWar: Boolean(fase.fogOfWar),
+    moveCooldownMs: fase.moveCooldownMs ?? 0,
     onExit: () => campaignManager.onMazeExit(fase),
     onDistraction: (pos) => campaignManager.onMazeDistraction(fase, pos)
   }),
+
+  limparDistractionsTimed: () => {
+    campanhaEstado.distractionTimeouts.forEach((id) => clearTimeout(id));
+    campanhaEstado.distractionTimeouts = [];
+  },
+
+  agendarDistractionsTimed: (fase) => {
+    (fase.distractionsTimed || []).forEach((config, index) => {
+      const key = `${fase.id}-timed-${index}`;
+      if (campanhaEstado.timedDistractionsFired.has(key)) return;
+
+      const delayMs = Math.max(0, Number(config.delaySegundos) || 0) * 1000;
+      const timeoutId = setTimeout(() => {
+        if (campanhaEstado.faseAtual !== fase.id) return;
+        if (!MazeEngine.isRunning()) return;
+        campanhaEstado.timedDistractionsFired.add(key);
+        campaignManager.mostrarDistraction(config);
+      }, delayMs);
+
+      campanhaEstado.distractionTimeouts.push(timeoutId);
+    });
+  },
+
+  atualizarMazeHints: (fase) => {
+    if (elementos.campanha.mazeHintFog) {
+      elementos.campanha.mazeHintFog.hidden = !fase?.fogOfWar;
+    }
+  },
 
   bindMazeControls: () => {
     MazeDpad.bind((dx, dy) => MazeEngine.move(dx, dy));
@@ -1805,12 +1843,15 @@ const campaignManager = {
     campanhaEstado.modo = 'campanha';
     campanhaEstado.voltarParaMaze = true;
     campanhaUtils.aplicarEfeitoMaze(fase);
+    campaignManager.limparDistractionsTimed();
+    campaignManager.atualizarMazeHints(fase);
     utils.trocarTela('maze');
 
     const spawnInfo = MazeEngine.start(campaignManager.buildMazeOptions(fase));
 
     campanhaEstado.faseSpawn = { x: spawnInfo.spawnX, y: spawnInfo.spawnY };
     campaignManager.bindMazeControls();
+    campaignManager.agendarDistractionsTimed(fase);
     campaignManager.atualizarHud();
     progressoCampanha.salvar();
   },
@@ -1819,6 +1860,7 @@ const campaignManager = {
     campanhaEstado.modo = 'campanha';
     campanhaEstado.voltarParaMaze = true;
     campanhaUtils.aplicarEfeitoMaze(fase);
+    campaignManager.atualizarMazeHints(fase);
     utils.trocarTela('maze');
 
     if (!MazeEngine.resumeAtSpawn()) {
@@ -1834,6 +1876,7 @@ const campaignManager = {
   },
 
   onMazeExit: (fase) => {
+    campaignManager.limparDistractionsTimed();
     MazeEngine.stop();
     MazeDpad.unbind();
     campanhaUtils.limparEfeitoMaze();
@@ -1881,7 +1924,7 @@ const campaignManager = {
       elementos.campanha.distractionOverlay.setAttribute('aria-hidden', 'true');
     }
 
-    campanhaEstado.atencao = Math.min(100, campanhaEstado.atencao + 5);
+    campanhaEstado.atencao = Math.min(100, campanhaEstado.atencao + 2);
     campaignManager.atualizarHud();
 
     const fase = campanhaUtils.getFaseConfig(campanhaEstado.faseAtual);
@@ -2027,6 +2070,7 @@ const campaignManager = {
   gameOverTrace: () => {
     console.info('timer_esgotado');
     campaignManager.pararTimer();
+    campaignManager.limparDistractionsTimed();
     MazeEngine.stop();
     MazeDpad.unbind();
     campanhaUtils.limparEfeitoMaze();
@@ -2041,6 +2085,7 @@ const campaignManager = {
 
   desistir: () => {
     campaignManager.pararTimer();
+    campaignManager.limparDistractionsTimed();
     MazeEngine.stop();
     MazeDpad.unbind();
     campanhaUtils.limparEfeitoMaze();
