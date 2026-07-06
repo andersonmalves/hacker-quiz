@@ -30,7 +30,22 @@ A cada partida, **10 perguntas são sorteadas** do pool de 30 com **equilíbrio 
 
 O modo "Quiz Clássico" continua disponível para uma experiência direta sem labirinto.
 
-### Sobre a Trilha Sonora Dark
+### Sobre a trilha sonora
+
+O jogo usa uma **faixa synthwave em loop** pensada para ambiente cyber/laboratório, adequada a trabalho escolar:
+
+- **Faixa:** *BlueBeat 01 [loop]* por ERH (OpenGameArt, licença **CC-BY 3.0**)
+- **Créditos completos:** ver [`CREDITS.md`](CREDITS.md)
+- Inicia ao clicar em "Iniciar campanha" (navegadores bloqueiam autoplay sem gesto do usuário)
+- Volume reduz automaticamente durante o quiz para facilitar a leitura das perguntas
+- Botão **Som: ON/OFF** no HUD; preferência persistida em `localStorage`
+- Efeitos de acerto/erro são bleeps discretos gerados via Web Audio API
+
+**Texto sugerido para apresentação escolar:**
+
+> Trilha sonora: *BlueBeat 01 [loop]* por ERH, disponibilizada sob licença Creative Commons BY em OpenGameArt.org.
+
+### Sobre a Trilha Sonora Dark (legado — Quiz Clássico em `app.js`)
 
 O quiz possui uma **atmosfera sonora dark e sinistra** estilo "sistema invadido", gerada em tempo real com Tone.js. São **5 camadas de áudio** criando tensão:
 
@@ -87,9 +102,13 @@ Repositório **somente do jogo** (configuração do Cursor, se existir localment
 
 ```
 cyber-maze-v2/
-├── index.html           # Interface do jogo
-├── style.css            # Estilos dark/neon e responsividade
-├── app.js               # Quiz, campanha, pódio e orquestração
+├── public/
+│   └── audio/
+│       ├── bgm-gameplay.ogg   # Trilha CC-BY (ERH / OpenGameArt)
+│       └── CREDITS.txt
+├── src/
+│   └── main.js          # Cyber Maze v2 (Phaser + áudio)
+├── CREDITS.md           # Atribuições para uso escolar
 ├── maze/
 │   ├── engine.js        # Engine Canvas 2D com colisão, fragmentos e riscos
 │   ├── fases-config.js  # Fases, tilemaps e dificuldade
@@ -140,7 +159,7 @@ O pool de **30 perguntas** é adequado para lançamento: cobre os 6 temas sem ex
 - **30 perguntas no pool** - 10 sorteadas por partida no Quiz Clássico com equilíbrio por categoria
 - **Pódio local** via LocalStorage (top 10 jogadores)
 - **100 pontos por acerto** com feedback educativo
-- **Trilha sonora dark/horror** gerada proceduralmente com 5 camadas: drone grave constante, batidas irregulares de coração/máquina, alertas tipo sirene, sombras tensas e glitches de corrupção (com botão de mute 🔊/🔇)
+- **Trilha synthwave** em loop (CC-BY 3.0, ERH / OpenGameArt) com ducking no quiz e mute persistente
 - **Tema hacker** - dark, neon verde, glitch effect, fonte monospace
 - **Responsivo** - funciona em desktop e mobile
 - **Easter eggs** - Konami code (↑↑↓↓←→←→BA) e comandos no console (`help()`)

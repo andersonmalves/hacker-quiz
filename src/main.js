@@ -2,6 +2,10 @@ import Phaser from 'phaser';
 
 const STORAGE_KEY = 'cyberMazeV2Progress';
 const VIEW_MODE_KEY = 'cyberMazeViewMode';
+const MUTE_KEY = 'cyberMazeMute';
+const BGM_PATH = '/audio/bgm-gameplay.ogg';
+const BGM_VOLUME = 0.35;
+const BGM_DUCKED_VOLUME = 0.12;
 const TILE_SIZE = 32;
 const LEVEL_COUNT = 10;
 const RAYCAST_FOV = Math.PI / 3;
@@ -140,7 +144,7 @@ const state = {
   requiredShards: 0,
   awaitingQuiz: false,
   quizAnswered: false,
-  muted: false,
+  muted: getInitialMuted(),
   viewMode: getInitialViewMode(),
   collectedShards: new Set(),
   playerAngle: 0,
@@ -158,39 +162,74 @@ function getInitialViewMode() {
   }
 }
 
-class SynthAudio {
+function getInitialMuted() {
+  try {
+    const stored = localStorage.getItem(MUTE_KEY);
+    if (stored !== null) return stored === 'true';
+  } catch {
+    return reducedMotion;
+  }
+  return reducedMotion;
+}
+
+function persistMuted(muted) {
+  try {
+    localStorage.setItem(MUTE_KEY, String(muted));
+  } catch {
+    // localStorage indisponível — segue sem persistir
+  }
+}
+
+class GameAudio {
   constructor() {
     this.ctx = null;
     this.master = null;
-    this.loop = null;
+    this.bgm = null;
+    this.ducked = false;
+  }
+
+  async ensureCtx() {
+    if (!this.ctx) {
+      this.ctx = new AudioContext();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.45;
+      this.master.connect(this.ctx.destination);
+    }
+    if (this.ctx.state === 'suspended') await this.ctx.resume();
+  }
+
+  bgmVolume() {
+    return this.ducked ? BGM_DUCKED_VOLUME : BGM_VOLUME;
   }
 
   async start() {
     if (state.muted) return;
-    if (!this.ctx) {
-      this.ctx = new AudioContext();
-      this.master = this.ctx.createGain();
-      this.master.gain.value = 0.16;
-      this.master.connect(this.ctx.destination);
+    if (!this.bgm) {
+      this.bgm = new Audio(BGM_PATH);
+      this.bgm.loop = true;
+      this.bgm.volume = this.bgmVolume();
     }
-    if (this.ctx.state === 'suspended') await this.ctx.resume();
-    if (this.loop) return;
-    let step = 0;
-    const bass = [55, 55, 82.41, 73.42, 65.41, 65.41, 98, 82.41];
-    this.loop = setInterval(() => {
-      this.note(bass[step % bass.length], 0.09, 'sawtooth', 0.22);
-      if (step % 4 === 0) this.noise(0.045, 0.12);
-      if (step % 8 === 6) this.note(440 + state.levelIndex * 18, 0.05, 'square', 0.08);
-      step += 1;
-    }, 145);
+    this.bgm.volume = this.bgmVolume();
+    try {
+      await this.bgm.play();
+    } catch (err) {
+      console.warn('[GameAudio] trilha indisponível:', err);
+    }
+    await this.ensureCtx();
   }
 
   stop() {
-    if (this.loop) clearInterval(this.loop);
-    this.loop = null;
+    if (!this.bgm) return;
+    this.bgm.pause();
+    this.bgm.currentTime = 0;
   }
 
-  note(freq, duration, type = 'square', volume = 0.18) {
+  setDucked(on) {
+    this.ducked = on;
+    if (this.bgm && !state.muted) this.bgm.volume = this.bgmVolume();
+  }
+
+  note(freq, duration, type = 'triangle', volume = 0.1) {
     if (!this.ctx || state.muted) return;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -203,30 +242,20 @@ class SynthAudio {
     osc.stop(this.ctx.currentTime + duration);
   }
 
-  noise(duration, volume) {
-    if (!this.ctx || state.muted) return;
-    const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * duration, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
-    const src = this.ctx.createBufferSource();
-    const gain = this.ctx.createGain();
-    src.buffer = buffer;
-    gain.gain.value = volume;
-    src.connect(gain).connect(this.master);
-    src.start();
-  }
-
   success() {
-    [523.25, 659.25, 783.99].forEach((freq, index) => setTimeout(() => this.note(freq, 0.09, 'triangle', 0.18), index * 70));
+    [523.25, 659.25, 783.99].forEach((freq, index) => {
+      setTimeout(() => this.note(freq, 0.08, 'triangle', 0.1), index * 70);
+    });
   }
 
   error() {
-    [220, 164.81].forEach((freq, index) => setTimeout(() => this.note(freq, 0.12, 'sawtooth', 0.2), index * 80));
-    this.noise(0.12, 0.18);
+    [220, 164.81].forEach((freq, index) => {
+      setTimeout(() => this.note(freq, 0.1, 'sine', 0.09), index * 80);
+    });
   }
 }
 
-const audio = new SynthAudio();
+const audio = new GameAudio();
 
 class GameScene extends Phaser.Scene {
   constructor() {
@@ -612,6 +641,61 @@ function movePlayer(scene) {
   scene.player.body.velocity.normalize().scale(vx || vy ? speed : 0);
 }
 
+function drawRaycastFloor(g, width, height, horizon) {
+  const floorHeight = height - horizon;
+  for (let band = 1; band <= 10; band += 1) {
+    const t = band / 10;
+    const lineY = Math.floor(horizon + (t * t) * floorHeight);
+    g.lineStyle(1, 0x2a3f62, 0.14 + t * 0.24);
+    g.lineBetween(0, lineY, width, lineY);
+  }
+  const vanishX = width / 2;
+  for (let lane = -7; lane <= 7; lane += 1) {
+    if (lane === 0) continue;
+    const endX = vanishX + lane * (width * 0.075);
+    g.lineStyle(1, 0x223552, 0.16);
+    g.lineBetween(vanishX, horizon, endX, height);
+  }
+}
+
+function getWallShade(correctedDistance) {
+  return Math.max(0.34, 1 - correctedDistance / 14);
+}
+
+function getWallColumnColor(hit, shade) {
+  const sideMul = hit.side ? 0.68 : 1;
+  const brickFrac = (hit.wallX * 4) % 1;
+  const isMortar = brickFrac < 0.1 || brickFrac > 0.9;
+  const textureMul = isMortar ? 0.45 : 1;
+  const s = shade * sideMul * textureMul;
+  const baseR = hit.side ? 16 : 24;
+  const baseG = hit.side ? 42 : 64;
+  const baseB = hit.side ? 78 : 118;
+  return Phaser.Display.Color.GetColor(
+    Math.floor(baseR * s),
+    Math.floor(baseG * s),
+    Math.floor(baseB * s)
+  );
+}
+
+function drawWallColumn(g, x, y, columnWidth, wallHeight, hit, shade) {
+  const h = Math.ceil(wallHeight);
+  g.fillStyle(getWallColumnColor(hit, shade), 1);
+  g.fillRect(x, y, columnWidth, h);
+
+  const rowHeight = 20;
+  const rowOffset = (Math.floor(hit.wallX * 4) % 2) * (rowHeight / 2);
+  for (let row = rowOffset + rowHeight; row < h; row += rowHeight) {
+    g.fillStyle(0x02050c, 0.3);
+    g.fillRect(x, y + row, columnWidth, 2);
+  }
+
+  g.fillStyle(0x00f5ff, 0.24 + shade * 0.2);
+  g.fillRect(x, y, columnWidth, 2);
+  g.fillStyle(0x010308, 0.6);
+  g.fillRect(x, y + h - 3, columnWidth, 3);
+}
+
 function updateRaycastView(scene) {
   if (!is3dMode()) {
     if (scene.raycastGraphics) scene.raycastGraphics.clear();
@@ -629,31 +713,22 @@ function updateRaycastView(scene) {
   const depths = [];
 
   g.clear();
-  g.fillGradientStyle(0x101b35, 0x071024, 0x03050c, 0x02040a, 1, 1, 1, 1);
+  g.fillGradientStyle(0x0c1630, 0x061020, 0x03050c, 0x020408, 1, 1, 1, 1);
   g.fillRect(0, 0, width, horizon);
-  g.fillGradientStyle(0x171016, 0x171016, 0x05070d, 0x05070d, 1, 1, 1, 1);
+  g.fillGradientStyle(0x120c14, 0x0c0810, 0x04060b, 0x020304, 1, 1, 1, 1);
   g.fillRect(0, horizon, width, height - horizon);
+  drawRaycastFloor(g, width, height, horizon);
 
   for (let column = 0; column < RAYCAST_COLUMNS; column += 1) {
     const rayAngle = state.playerAngle - RAYCAST_FOV / 2 + (column / (RAYCAST_COLUMNS - 1)) * RAYCAST_FOV;
     const hit = castWallRay(scene.grid, scene.player.x / TILE_SIZE, scene.player.y / TILE_SIZE, rayAngle);
     const correctedDistance = Math.max(0.0001, hit.distance * Math.cos(rayAngle - state.playerAngle));
     const wallHeight = Math.min(height * 1.8, height / correctedDistance);
-    const shade = Math.max(0.24, 1 - correctedDistance / 13);
-    const color = Phaser.Display.Color.GetColor(
-      Math.floor(32 * shade),
-      Math.floor((hit.side ? 158 : 220) * shade),
-      Math.floor(255 * shade)
-    );
+    const shade = getWallShade(correctedDistance);
     const x = Math.floor((column / RAYCAST_COLUMNS) * width);
     const y = Math.floor(horizon - wallHeight / 2);
 
-    g.fillStyle(color, 1);
-    g.fillRect(x, y, columnWidth, Math.ceil(wallHeight));
-    if (column % 9 === 0) {
-      g.fillStyle(0x030714, 0.18);
-      g.fillRect(x, y, 1, Math.ceil(wallHeight));
-    }
+    drawWallColumn(g, x, y, columnWidth, wallHeight, hit, shade);
     depths[column] = correctedDistance;
   }
 
@@ -696,11 +771,15 @@ function castWallRay(grid, originX, originY, angle) {
       const distance = side === 1
         ? (mapX - originX + (1 - stepX) / 2) / rayDirX
         : (mapY - originY + (1 - stepY) / 2) / rayDirY;
-      return { distance: Math.abs(distance), side };
+      const absDistance = Math.abs(distance);
+      const wallHit = side === 1
+        ? originY + absDistance * rayDirY
+        : originX + absDistance * rayDirX;
+      return { distance: absDistance, side, wallX: wallHit - Math.floor(wallHit) };
     }
   }
 
-  return { distance: 24, side: 0 };
+  return { distance: 24, side: 0, wallX: 0 };
 }
 
 function drawRaycastSprites(scene, width, height, horizon) {
@@ -823,6 +902,7 @@ function showMenu() {
     scene.pausedByUi = true;
     scene.player?.body?.setVelocity(0, 0);
   }
+  audio.setDucked(false);
   ui.menu.hidden = false;
   ui.hud.hidden = true;
   ui.briefing.hidden = true;
@@ -850,6 +930,7 @@ function showBriefing(index) {
 
 function showQuiz(scene) {
   const question = levels[state.levelIndex].question;
+  audio.setDucked(true);
   ui.quiz.hidden = false;
   setTouchControlsVisible(false);
   updateViewToggleVisibility();
@@ -882,6 +963,7 @@ function answerQuiz(scene, index) {
     updateHud();
     setTimeout(() => {
       ui.quiz.hidden = true;
+      audio.setDucked(false);
       state.awaitingQuiz = false;
       state.quizAnswered = false;
       scene.startLevel(state.levelIndex);
@@ -895,6 +977,7 @@ function answerQuiz(scene, index) {
   updateHud();
   setTimeout(() => {
     ui.quiz.hidden = true;
+    audio.setDucked(false);
     state.awaitingQuiz = false;
     state.quizAnswered = false;
     if (state.levelIndex >= LEVEL_COUNT) showEnding(scene);
@@ -1079,11 +1162,16 @@ ui.playAgain.addEventListener('click', () => {
   game.scene.getScene('GameScene').startLevel(0);
 });
 
-ui.soundToggle.addEventListener('click', async () => {
-  state.muted = !state.muted;
+function syncSoundToggleUi() {
   ui.soundToggle.textContent = `Som: ${state.muted ? 'OFF' : 'ON'}`;
   ui.soundToggle.setAttribute('aria-pressed', String(!state.muted));
   ui.soundToggle.setAttribute('aria-label', state.muted ? 'Som desativado' : 'Som ativado');
+}
+
+ui.soundToggle.addEventListener('click', async () => {
+  state.muted = !state.muted;
+  persistMuted(state.muted);
+  syncSoundToggleUi();
   if (state.muted) audio.stop();
   else await audio.start();
 });
@@ -1119,4 +1207,5 @@ window.addEventListener('resize', () => {
   getGameScene()?.layoutCamera();
 });
 setViewMode(state.viewMode, false);
+syncSoundToggleUi();
 refreshContinueButton();
