@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 const STORAGE_KEY = 'cyberMazeV2Progress';
+const VIEW_MODE_KEY = 'cyberMazeViewMode';
 const TILE_SIZE = 32;
 const LEVEL_COUNT = 10;
 
@@ -123,7 +124,9 @@ const ui = {
   quizFeedback: document.getElementById('quiz-feedback'),
   playAgain: document.getElementById('play-again'),
   touch: document.getElementById('touch-controls'),
-  soundToggle: document.getElementById('sound-toggle')
+  soundToggle: document.getElementById('sound-toggle'),
+  viewToggle: document.getElementById('view-toggle'),
+  viewModeInputs: [...document.querySelectorAll('input[name="view-mode"]')]
 };
 
 const state = {
@@ -134,11 +137,21 @@ const state = {
   requiredShards: 0,
   awaitingQuiz: false,
   quizAnswered: false,
-  muted: false
+  muted: false,
+  viewMode: getInitialViewMode(),
+  collectedShards: new Set()
 };
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const hasTouchControls = window.matchMedia('(hover: none), (pointer: coarse)').matches;
+
+function getInitialViewMode() {
+  try {
+    return localStorage.getItem(VIEW_MODE_KEY) === '3d' ? '3d' : '2d';
+  } catch {
+    return '2d';
+  }
+}
 
 class SynthAudio {
   constructor() {
@@ -225,6 +238,7 @@ class GameScene extends Phaser.Scene {
     this.pausedByUi = true;
     this.lastDamageAt = 0;
     this.colliders = [];
+    this.playerFollowers = [];
   }
 
   create() {
@@ -246,12 +260,13 @@ class GameScene extends Phaser.Scene {
     state.levelIndex = index;
     state.shards = 0;
     state.requiredShards = levels[index].shards;
+    state.collectedShards = new Set();
     saveProgress();
     updateHud();
     showBriefing(index);
   }
 
-  launchLevel() {
+  launchLevel(options = {}) {
     const level = levels[state.levelIndex];
     const maze = makeMaze(level.width, level.height, state.levelIndex + 11);
     this.grid = maze.grid;
@@ -263,6 +278,9 @@ class GameScene extends Phaser.Scene {
     drawAtmosphere(this, level.width, level.height);
     drawTiles(this, maze.grid, this.walls);
     this.player = makePlayer(this, maze.start);
+    if (options.playerPosition) {
+      this.player.setPosition(options.playerPosition.x, options.playerPosition.y);
+    }
     this.exit = makeExit(this, maze.exit);
     this.exit.setAlpha(0.34);
 
@@ -279,6 +297,9 @@ class GameScene extends Phaser.Scene {
     this.layoutCamera(level);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.physics.world.setBounds(0, 0, level.width * TILE_SIZE, level.height * TILE_SIZE);
+    if (state.shards >= state.requiredShards) this.exit.setAlpha(1);
+    updateFollowers(this);
+    updateViewToggleVisibility();
     this.pausedByUi = false;
   }
 
@@ -310,12 +331,17 @@ class GameScene extends Phaser.Scene {
     if (this.shardGroup) this.shardGroup.clear(true, true);
     [...this.children.list].forEach((child) => child.destroy());
     this.sentries = [];
+    this.playerFollowers = [];
+    this.player = null;
+    this.exit = null;
   }
 
   update(time) {
     if (this.pausedByUi || !this.player) return;
     movePlayer(this);
+    updateFollowers(this);
     updateSentries(this, time);
+    updateActorDepths(this);
   }
 }
 
@@ -349,7 +375,14 @@ function makeMaze(width, height, seed) {
 
 function drawAtmosphere(scene, width, height) {
   const g = scene.add.graphics();
-  g.fillStyle(0x070916, 1).fillRect(0, 0, width * TILE_SIZE, height * TILE_SIZE);
+  g.setDepth(-20);
+  g.fillStyle(is3dMode() ? 0x030714 : 0x070916, 1).fillRect(0, 0, width * TILE_SIZE, height * TILE_SIZE);
+  if (is3dMode()) {
+    const horizon = height * TILE_SIZE * 0.42;
+    g.fillGradientStyle(0x0b1734, 0x0b1734, 0x050814, 0x050814, 0.72, 0.72, 0.2, 0.2);
+    g.fillRect(0, 0, width * TILE_SIZE, horizon);
+    g.lineStyle(2, 0x00f5ff, 0.18).lineBetween(0, horizon, width * TILE_SIZE, horizon - 28);
+  }
   for (let i = 0; i < 180; i += 1) {
     const x = Phaser.Math.Between(0, width * TILE_SIZE);
     const y = Phaser.Math.Between(0, height * TILE_SIZE);
@@ -359,7 +392,16 @@ function drawAtmosphere(scene, width, height) {
 }
 
 function drawTiles(scene, grid, walls) {
+  if (is3dMode()) {
+    drawTiles3d(scene, grid, walls);
+    return;
+  }
+  drawTiles2d(scene, grid, walls);
+}
+
+function drawTiles2d(scene, grid, walls) {
   const g = scene.add.graphics();
+  g.setDepth(-10);
   grid.forEach((row, y) => {
     row.forEach((tile, x) => {
       const px = x * TILE_SIZE;
@@ -376,11 +418,43 @@ function drawTiles(scene, grid, walls) {
   });
 }
 
+function drawTiles3d(scene, grid, walls) {
+  const g = scene.add.graphics();
+  g.setDepth(-10);
+  grid.forEach((row, y) => {
+    row.forEach((tile, x) => {
+      const px = x * TILE_SIZE;
+      const py = y * TILE_SIZE;
+      g.fillStyle(0x081126, 1).fillRect(px, py, TILE_SIZE, TILE_SIZE);
+      g.lineStyle(1, 0x1e335d, 0.2).strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+      if (tile !== 1) return;
+
+      const lift = Math.min(8, 4 + y * 0.15);
+      g.fillStyle(0x02040d, 0.56).fillRect(px + 7, py + 11, TILE_SIZE - 2, TILE_SIZE - 2);
+      g.fillStyle(0x06101f, 1).fillRoundedRect(px + 6, py + lift, TILE_SIZE - 6, TILE_SIZE - 4, 4);
+      g.fillStyle(0x0b162c, 1).fillRoundedRect(px + 5, py + lift - 2, TILE_SIZE - 5, TILE_SIZE - 5, 4);
+      g.fillStyle(0x173254, 1).fillRoundedRect(px + 2, py + 2, TILE_SIZE - 6, TILE_SIZE - 6, 4);
+      g.fillGradientStyle(0x285c83, 0x173254, 0x0d1b35, 0x071022, 0.95, 0.95, 1, 1);
+      g.fillRoundedRect(px + 3, py + 3, TILE_SIZE - 10, TILE_SIZE - 10, 4);
+      g.lineStyle(1, 0x00f5ff, 0.26).strokeRoundedRect(px + 3, py + 3, TILE_SIZE - 10, TILE_SIZE - 10, 4);
+      g.lineStyle(1, 0x66f7ff, 0.22).lineBetween(px + 6, py + 6, px + TILE_SIZE - 10, py + 4);
+      g.lineStyle(1, 0xff4fd8, 0.13).lineBetween(px + 5, py + TILE_SIZE - 9, px + TILE_SIZE - 3, py + TILE_SIZE - 2);
+      walls.add(scene.add.rectangle(px + TILE_SIZE / 2, py + TILE_SIZE / 2, TILE_SIZE, TILE_SIZE, 0x000000, 0));
+    });
+  });
+}
+
 function makePlayer(scene, start) {
   const x = start.x * TILE_SIZE + TILE_SIZE / 2;
   const y = start.y * TILE_SIZE + TILE_SIZE / 2;
-  const player = scene.add.circle(x, y, 11, 0xffcc66, 1);
-  scene.add.circle(x, y, 18, 0xffcc66, 0.18).setData('follow', player);
+  const player = is3dMode()
+    ? scene.add.ellipse(x, y - 3, 22, 28, 0xffcc66, 1)
+    : scene.add.circle(x, y, 11, 0xffcc66, 1);
+  const shadow = scene.add.ellipse(x, y + 10, 30, 10, 0x000000, is3dMode() ? 0.28 : 0).setDepth(0);
+  const glow = scene.add.circle(x, y, 18, 0xffcc66, is3dMode() ? 0.08 : 0.18).setDepth(1);
+  scene.playerFollowers.push({ object: shadow, target: player, offsetX: 0, offsetY: 13, depthOffset: -2 });
+  scene.playerFollowers.push({ object: glow, target: player, offsetX: 0, offsetY: 0, depthOffset: -1 });
+  player.setDepth(2);
   scene.physics.add.existing(player);
   player.body.setCircle(11);
   player.body.setCollideWorldBounds(true);
@@ -390,7 +464,10 @@ function makePlayer(scene, start) {
 function makeExit(scene, exit) {
   const x = exit.x * TILE_SIZE + TILE_SIZE / 2;
   const y = exit.y * TILE_SIZE + TILE_SIZE / 2;
-  const portal = scene.add.star(x, y, 8, 10, 19, 0x8b5cf6, 1);
+  const portal = is3dMode()
+    ? scene.add.polygon(x, y, [0, -20, 15, 0, 0, 20, -15, 0], 0x8b5cf6, 1)
+    : scene.add.star(x, y, 8, 10, 19, 0x8b5cf6, 1);
+  portal.setDepth(y + 6);
   if (!reducedMotion) {
     scene.tweens.add({ targets: portal, angle: 360, duration: 2200, repeat: -1, ease: 'Linear' });
   }
@@ -404,8 +481,14 @@ function placeObjects(scene, maze, level) {
   shuffle(cells, seeded(state.levelIndex + 101));
   for (let i = 0; i < level.shards; i += 1) {
     const cell = cells.pop();
-    const shard = scene.add.star(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 16, 4, 7, 15, 0x00f5ff, 1);
+    const shardKey = cellKey(cell);
+    if (state.collectedShards.has(shardKey)) continue;
+    const shard = is3dMode()
+      ? scene.add.polygon(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 13, [0, -13, 10, 0, 0, 13, -10, 0], 0x00f5ff, 1)
+      : scene.add.star(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 16, 4, 7, 15, 0x00f5ff, 1);
     shard.setData('kind', 'shard');
+    shard.setData('cellKey', shardKey);
+    shard.setDepth(shard.y + 4);
     if (!reducedMotion) {
       scene.tweens.add({ targets: shard, y: shard.y - 5, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     }
@@ -414,14 +497,20 @@ function placeObjects(scene, maze, level) {
   }
   for (let i = 0; i < level.hazards; i += 1) {
     const cell = cells.pop();
-    const hazard = scene.add.rectangle(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 16, 24, 24, 0xff2d55, 0.38);
+    const hazard = is3dMode()
+      ? scene.add.polygon(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 18, [0, -13, 13, 0, 0, 13, -13, 0], 0xff2d55, 0.44)
+      : scene.add.rectangle(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 16, 24, 24, 0xff2d55, 0.38);
     hazard.setStrokeStyle(2, 0xff2d55, 0.9);
+    hazard.setDepth(hazard.y + 2);
     scene.physics.add.existing(hazard, true);
     scene.hazards.add(hazard);
   }
   for (let i = 0; i < level.sentries; i += 1) {
     const cell = cells.pop();
-    const sentry = scene.add.rectangle(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 16, 20, 20, 0xff4fd8, 1);
+    const sentry = is3dMode()
+      ? scene.add.polygon(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 13, [0, -12, 12, -4, 12, 12, -12, 12, -12, -4], 0xff4fd8, 1)
+      : scene.add.rectangle(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 16, 20, 20, 0xff4fd8, 1);
+    sentry.setDepth(sentry.y + 8);
     scene.physics.add.existing(sentry);
     sentry.body.setCollideWorldBounds(true);
     sentry.body.setBounce(1, 1);
@@ -430,6 +519,47 @@ function placeObjects(scene, maze, level) {
     scene.sentries.push(sentry);
     scene.colliders.push(scene.physics.add.collider(sentry, scene.walls));
   }
+}
+
+function is3dMode() {
+  return state.viewMode === '3d';
+}
+
+function setViewMode(mode, shouldRefresh = true) {
+  state.viewMode = mode === '3d' ? '3d' : '2d';
+  safeStorage.set(VIEW_MODE_KEY, state.viewMode);
+  document.body.dataset.viewMode = state.viewMode;
+  ui.viewToggle.textContent = `Modo: ${state.viewMode.toUpperCase()}`;
+  ui.viewToggle.setAttribute('aria-label', `Alternar para modo ${is3dMode() ? '2D' : '3D'}`);
+  ui.viewModeInputs.forEach((input) => {
+    input.checked = input.value === state.viewMode;
+  });
+  updateViewToggleVisibility();
+
+  if (!shouldRefresh) return;
+  const scene = getGameScene();
+  if (!scene?.player?.active || scene.pausedByUi || state.awaitingQuiz) return;
+  const playerPosition = { x: scene.player.x, y: scene.player.y };
+  scene.clearLevel();
+  scene.launchLevel({ playerPosition });
+}
+
+function updateFollowers(scene) {
+  scene.playerFollowers.forEach(({ object, target, offsetX, offsetY, depthOffset }) => {
+    if (!object.active || !target.active) return;
+    object.setPosition(target.x + offsetX, target.y + offsetY);
+    object.setDepth(target.y + depthOffset);
+  });
+}
+
+function updateActorDepths(scene) {
+  scene.player?.setDepth(scene.player.y + 8);
+  scene.exit?.setDepth(scene.exit.y + 6);
+  scene.sentries.forEach((sentry) => sentry.setDepth(sentry.y + 8));
+}
+
+function updateViewToggleVisibility() {
+  ui.viewToggle.hidden = ui.menu.hidden || state.awaitingQuiz || !ui.quiz.hidden || !ui.ending.hidden;
 }
 
 function movePlayer(scene) {
@@ -455,6 +585,7 @@ function updateSentries(scene, time) {
 }
 
 function collectShard(scene, shard) {
+  state.collectedShards.add(shard.getData('cellKey'));
   shard.destroy();
   state.shards += 1;
   state.score += 75;
@@ -509,6 +640,7 @@ function showMenu() {
   setTouchControlsVisible(false);
   state.awaitingQuiz = false;
   state.quizAnswered = false;
+  updateViewToggleVisibility();
 }
 
 function showBriefing(index) {
@@ -522,12 +654,14 @@ function showBriefing(index) {
   ui.briefingKicker.textContent = `Setor ${String(index + 1).padStart(2, '0')} / ${LEVEL_COUNT}`;
   ui.briefingTitle.textContent = level.title;
   ui.briefingText.textContent = level.briefing;
+  updateViewToggleVisibility();
 }
 
 function showQuiz(scene) {
   const question = levels[state.levelIndex].question;
   ui.quiz.hidden = false;
   setTouchControlsVisible(false);
+  updateViewToggleVisibility();
   ui.quizCategory.textContent = question.category;
   ui.quizTitle.textContent = question.text;
   ui.quizFeedback.textContent = '';
@@ -583,6 +717,7 @@ function showEnding(scene) {
   ui.hud.hidden = true;
   setTouchControlsVisible(false);
   ui.ending.hidden = false;
+  updateViewToggleVisibility();
   safeStorage.remove(STORAGE_KEY);
 }
 
@@ -670,6 +805,10 @@ function openCells(grid) {
   return cells;
 }
 
+function cellKey(cell) {
+  return `${cell.x}:${cell.y}`;
+}
+
 function distance(a, b) {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
@@ -750,6 +889,14 @@ ui.soundToggle.addEventListener('click', async () => {
   else await audio.start();
 });
 
+ui.viewToggle.addEventListener('click', () => {
+  setViewMode(is3dMode() ? '2d' : '3d');
+});
+
+ui.viewModeInputs.forEach((input) => {
+  input.addEventListener('change', () => setViewMode(input.value));
+});
+
 ui.touch.querySelectorAll('button').forEach((button) => {
   const dir = button.dataset.dir;
   const start = (event) => {
@@ -769,4 +916,5 @@ window.addEventListener('resize', () => {
   game.scale.resize(window.innerWidth, window.innerHeight);
   getGameScene()?.layoutCamera();
 });
+setViewMode(state.viewMode, false);
 refreshContinueButton();

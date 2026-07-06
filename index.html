@@ -28,11 +28,22 @@
           <button id="continue-game" class="secondary-action" type="button" hidden>Continuar</button>
           <button id="reset-save" class="secondary-action" type="button" hidden>Nova campanha</button>
         </div>
+        <fieldset class="view-mode-picker" aria-label="Escolha o modo visual do labirinto">
+          <legend>Modo de jogo</legend>
+          <label>
+            <input type="radio" name="view-mode" value="2d" checked />
+            <span>2D clássico</span>
+          </label>
+          <label>
+            <input type="radio" name="view-mode" value="3d" />
+            <span>3D neon</span>
+          </label>
+        </fieldset>
         <div class="feature-grid" aria-label="Recursos do jogo">
           <span>10 fases</span>
           <span>Labirintos procedurais</span>
           <span>Quiz por portal</span>
-          <span>Áudio sintetizado</span>
+          <span>Modo 2D ou 3D</span>
         </div>
       </section>
 
@@ -74,6 +85,7 @@
     </div>
 
     <button id="sound-toggle" class="sound-toggle" type="button" aria-label="Som ativado" aria-pressed="true">Som: ON</button>
+    <button id="view-toggle" class="view-toggle" type="button" aria-label="Alternar para modo 3D" hidden>Modo: 2D</button>
 
     <script type="module" src="/src/main.js"></script>
   </body>

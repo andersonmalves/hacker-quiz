@@ -1706,7 +1706,8 @@ body {
 .panel,
 .hud,
 .touch-controls,
-.sound-toggle {
+.sound-toggle,
+.view-toggle {
   pointer-events: auto;
 }
 
@@ -1822,6 +1823,55 @@ body {
   margin-top: 28px;
 }
 
+.view-mode-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 22px;
+  padding: 0;
+  border: 0;
+}
+
+.view-mode-picker legend {
+  grid-column: 1 / -1;
+  margin-bottom: 8px;
+  color: #7890b6;
+  font: 700 0.72rem 'JetBrains Mono', monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.view-mode-picker label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  border: 1px solid rgba(0, 245, 255, 0.2);
+  border-radius: 16px;
+  color: #dffaff;
+  background: rgba(255, 255, 255, 0.055);
+  font: 700 0.78rem 'JetBrains Mono', monospace;
+  cursor: pointer;
+}
+
+.view-mode-picker input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.view-mode-picker label:has(input:checked) {
+  color: #06111e;
+  background: linear-gradient(135deg, #00f5ff, #ffcc66);
+  box-shadow: 0 14px 34px rgba(0, 245, 255, 0.18);
+}
+
+.view-mode-picker label:has(input:focus-visible) {
+  outline: 3px solid #ffcc66;
+  outline-offset: 4px;
+}
+
 .feature-grid span {
   min-height: 48px;
   padding: 14px;
@@ -1904,7 +1954,8 @@ body {
 .secondary-action:focus-visible,
 .quiz-options button:focus-visible,
 .touch-controls button:focus-visible,
-.sound-toggle:focus-visible {
+.sound-toggle:focus-visible,
+.view-toggle:focus-visible {
   outline: 3px solid #ffcc66;
   outline-offset: 4px;
   box-shadow: 0 0 0 6px rgba(255, 204, 102, 0.18), 0 0 28px rgba(0, 245, 255, 0.28);
@@ -1970,6 +2021,26 @@ body {
   backdrop-filter: blur(10px);
 }
 
+.view-toggle {
+  position: fixed;
+  left: 18px;
+  top: max(18px, env(safe-area-inset-top));
+  z-index: 35;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid rgba(0, 245, 255, 0.24);
+  border-radius: 999px;
+  color: #06111e;
+  background: linear-gradient(135deg, #00f5ff, #ffcc66);
+  font: 700 0.75rem 'JetBrains Mono', monospace;
+  box-shadow: 0 14px 34px rgba(0, 245, 255, 0.18);
+  cursor: pointer;
+}
+
+body[data-view-mode='3d'] #game-root canvas {
+  filter: saturate(1.12) contrast(1.08) drop-shadow(0 22px 42px rgba(0, 0, 0, 0.38));
+}
+
 @media (max-width: 740px) {
   .panel {
     left: 12px;
@@ -1996,6 +2067,10 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .view-mode-picker {
+    grid-template-columns: 1fr;
+  }
+
   .touch-controls {
     grid-template-columns: repeat(3, 50px);
     grid-template-rows: repeat(3, 50px);
@@ -2005,5 +2080,14 @@ body {
   .sound-toggle {
     top: auto;
     bottom: 184px;
+  }
+
+  .view-toggle {
+    top: auto;
+    bottom: 236px;
+  }
+
+  body[data-view-mode='3d'] #game-root canvas {
+    filter: none;
   }
 }
