@@ -4,6 +4,9 @@ const STORAGE_KEY = 'cyberMazeV2Progress';
 const VIEW_MODE_KEY = 'cyberMazeViewMode';
 const TILE_SIZE = 32;
 const LEVEL_COUNT = 10;
+const RAYCAST_FOV = Math.PI / 3;
+const RAYCAST_COLUMNS = 180;
+const PLAYER_TURN_SPEED = 2.7;
 
 const questions = [
   {
@@ -139,7 +142,8 @@ const state = {
   quizAnswered: false,
   muted: false,
   viewMode: getInitialViewMode(),
-  collectedShards: new Set()
+  collectedShards: new Set(),
+  playerAngle: 0
 };
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -239,6 +243,8 @@ class GameScene extends Phaser.Scene {
     this.lastDamageAt = 0;
     this.colliders = [];
     this.playerFollowers = [];
+    this.raycastGraphics = null;
+    this.raycastDepths = [];
   }
 
   create() {
@@ -278,6 +284,7 @@ class GameScene extends Phaser.Scene {
     drawAtmosphere(this, level.width, level.height);
     drawTiles(this, maze.grid, this.walls);
     this.player = makePlayer(this, maze.start);
+    if (!options.playerPosition) state.playerAngle = 0;
     if (options.playerPosition) {
       this.player.setPosition(options.playerPosition.x, options.playerPosition.y);
     }
@@ -300,6 +307,7 @@ class GameScene extends Phaser.Scene {
     if (state.shards >= state.requiredShards) this.exit.setAlpha(1);
     updateFollowers(this);
     updateViewToggleVisibility();
+    updateWorldObjectVisibility(this);
     this.pausedByUi = false;
   }
 
@@ -332,6 +340,8 @@ class GameScene extends Phaser.Scene {
     [...this.children.list].forEach((child) => child.destroy());
     this.sentries = [];
     this.playerFollowers = [];
+    this.raycastGraphics = null;
+    this.raycastDepths = [];
     this.player = null;
     this.exit = null;
   }
@@ -342,6 +352,7 @@ class GameScene extends Phaser.Scene {
     updateFollowers(this);
     updateSentries(this, time);
     updateActorDepths(this);
+    updateRaycastView(this);
   }
 }
 
@@ -529,8 +540,8 @@ function setViewMode(mode, shouldRefresh = true) {
   state.viewMode = mode === '3d' ? '3d' : '2d';
   safeStorage.set(VIEW_MODE_KEY, state.viewMode);
   document.body.dataset.viewMode = state.viewMode;
-  ui.viewToggle.textContent = `Modo: ${state.viewMode.toUpperCase()}`;
-  ui.viewToggle.setAttribute('aria-label', `Alternar para modo ${is3dMode() ? '2D' : '3D'}`);
+  ui.viewToggle.textContent = `Modo: ${is3dMode() ? 'FPS' : '2D'}`;
+  ui.viewToggle.setAttribute('aria-label', `Alternar para modo ${is3dMode() ? '2D' : 'FPS 2.5D'}`);
   ui.viewModeInputs.forEach((input) => {
     input.checked = input.value === state.viewMode;
   });
@@ -542,6 +553,14 @@ function setViewMode(mode, shouldRefresh = true) {
   const playerPosition = { x: scene.player.x, y: scene.player.y };
   scene.clearLevel();
   scene.launchLevel({ playerPosition });
+}
+
+function updateWorldObjectVisibility(scene) {
+  const visible = !is3dMode();
+  scene.children.list.forEach((child) => {
+    if (child === scene.raycastGraphics) return;
+    child.setVisible?.(visible);
+  });
 }
 
 function updateFollowers(scene) {
@@ -564,14 +583,182 @@ function updateViewToggleVisibility() {
 
 function movePlayer(scene) {
   const speed = 190;
+  if (is3dMode()) {
+    const turn = PLAYER_TURN_SPEED;
+    const forward = Number(scene.cursors.up.isDown || scene.keys.W.isDown || isTouchPressed('up'))
+      - Number(scene.cursors.down.isDown || scene.keys.S.isDown || isTouchPressed('down'));
+    const rotation = Number(scene.cursors.right.isDown || scene.keys.D.isDown || isTouchPressed('right'))
+      - Number(scene.cursors.left.isDown || scene.keys.A.isDown || isTouchPressed('left'));
+
+    state.playerAngle = normalizeAngle(state.playerAngle + rotation * turn * (scene.game.loop.delta / 1000));
+    scene.player.body.setVelocity(
+      Math.cos(state.playerAngle) * forward * speed,
+      Math.sin(state.playerAngle) * forward * speed
+    );
+    return;
+  }
+
   let vx = 0;
   let vy = 0;
-  if (scene.cursors.left.isDown || scene.keys.A.isDown || window.touchDir === 'left') vx = -speed;
-  if (scene.cursors.right.isDown || scene.keys.D.isDown || window.touchDir === 'right') vx = speed;
-  if (scene.cursors.up.isDown || scene.keys.W.isDown || window.touchDir === 'up') vy = -speed;
-  if (scene.cursors.down.isDown || scene.keys.S.isDown || window.touchDir === 'down') vy = speed;
+  if (scene.cursors.left.isDown || scene.keys.A.isDown || isTouchPressed('left')) vx = -speed;
+  if (scene.cursors.right.isDown || scene.keys.D.isDown || isTouchPressed('right')) vx = speed;
+  if (scene.cursors.up.isDown || scene.keys.W.isDown || isTouchPressed('up')) vy = -speed;
+  if (scene.cursors.down.isDown || scene.keys.S.isDown || isTouchPressed('down')) vy = speed;
   scene.player.body.setVelocity(vx, vy);
   scene.player.body.velocity.normalize().scale(vx || vy ? speed : 0);
+}
+
+function updateRaycastView(scene) {
+  if (!is3dMode()) {
+    if (scene.raycastGraphics) scene.raycastGraphics.clear();
+    return;
+  }
+  if (!scene.raycastGraphics) {
+    scene.raycastGraphics = scene.add.graphics().setScrollFactor(0).setDepth(100000);
+  }
+
+  const g = scene.raycastGraphics;
+  const width = scene.scale.width;
+  const height = scene.scale.height;
+  const horizon = Math.floor(height * 0.48);
+  const columnWidth = Math.ceil(width / RAYCAST_COLUMNS);
+  const depths = [];
+
+  g.clear();
+  g.fillGradientStyle(0x101b35, 0x071024, 0x03050c, 0x02040a, 1, 1, 1, 1);
+  g.fillRect(0, 0, width, horizon);
+  g.fillGradientStyle(0x171016, 0x171016, 0x05070d, 0x05070d, 1, 1, 1, 1);
+  g.fillRect(0, horizon, width, height - horizon);
+
+  for (let column = 0; column < RAYCAST_COLUMNS; column += 1) {
+    const rayAngle = state.playerAngle - RAYCAST_FOV / 2 + (column / (RAYCAST_COLUMNS - 1)) * RAYCAST_FOV;
+    const hit = castWallRay(scene.grid, scene.player.x / TILE_SIZE, scene.player.y / TILE_SIZE, rayAngle);
+    const correctedDistance = Math.max(0.0001, hit.distance * Math.cos(rayAngle - state.playerAngle));
+    const wallHeight = Math.min(height * 1.8, height / correctedDistance);
+    const shade = Math.max(0.24, 1 - correctedDistance / 13);
+    const color = Phaser.Display.Color.GetColor(
+      Math.floor(32 * shade),
+      Math.floor((hit.side ? 158 : 220) * shade),
+      Math.floor(255 * shade)
+    );
+    const x = Math.floor((column / RAYCAST_COLUMNS) * width);
+    const y = Math.floor(horizon - wallHeight / 2);
+
+    g.fillStyle(color, 1);
+    g.fillRect(x, y, columnWidth, Math.ceil(wallHeight));
+    if (column % 9 === 0) {
+      g.fillStyle(0x030714, 0.18);
+      g.fillRect(x, y, 1, Math.ceil(wallHeight));
+    }
+    depths[column] = correctedDistance;
+  }
+
+  scene.raycastDepths = depths;
+  drawRaycastSprites(scene, width, height, horizon);
+  g.lineStyle(2, 0x00f5ff, 0.2).lineBetween(0, horizon, width, horizon);
+  g.lineStyle(2, 0xffcc66, 0.7).lineBetween(width / 2 - 10, horizon, width / 2 + 10, horizon);
+  g.lineStyle(2, 0xffcc66, 0.7).lineBetween(width / 2, horizon - 10, width / 2, horizon + 10);
+}
+
+function castWallRay(grid, originX, originY, angle) {
+  const rayDirX = Math.cos(angle);
+  const rayDirY = Math.sin(angle);
+  let mapX = Math.floor(originX);
+  let mapY = Math.floor(originY);
+  const deltaDistX = Math.abs(1 / (rayDirX || 0.000001));
+  const deltaDistY = Math.abs(1 / (rayDirY || 0.000001));
+  const stepX = rayDirX < 0 ? -1 : 1;
+  const stepY = rayDirY < 0 ? -1 : 1;
+  let sideDistX = rayDirX < 0
+    ? (originX - mapX) * deltaDistX
+    : (mapX + 1 - originX) * deltaDistX;
+  let sideDistY = rayDirY < 0
+    ? (originY - mapY) * deltaDistY
+    : (mapY + 1 - originY) * deltaDistY;
+  let side = 0;
+
+  for (let i = 0; i < 48; i += 1) {
+    if (sideDistX < sideDistY) {
+      sideDistX += deltaDistX;
+      mapX += stepX;
+      side = 1;
+    } else {
+      sideDistY += deltaDistY;
+      mapY += stepY;
+      side = 0;
+    }
+
+    if (grid[mapY]?.[mapX] === 1 || !grid[mapY]) {
+      const distance = side === 1
+        ? (mapX - originX + (1 - stepX) / 2) / rayDirX
+        : (mapY - originY + (1 - stepY) / 2) / rayDirY;
+      return { distance: Math.abs(distance), side };
+    }
+  }
+
+  return { distance: 24, side: 0 };
+}
+
+function drawRaycastSprites(scene, width, height, horizon) {
+  const objects = [
+    ...scene.shardGroup.getChildren().map((object) => ({ object, color: 0x00f5ff, scale: 0.34, shape: 'diamond' })),
+    ...scene.hazards.getChildren().map((object) => ({ object, color: 0xff2d55, scale: 0.38, shape: 'hazard' })),
+    ...scene.sentries.map((object) => ({ object, color: 0xff4fd8, scale: 0.52, shape: 'sentry' })),
+    scene.exit ? { object: scene.exit, color: state.shards >= state.requiredShards ? 0x8b5cf6 : 0x3b265f, scale: 0.72, shape: 'portal' } : null
+  ].filter(Boolean).filter(({ object }) => object?.active);
+
+  objects
+    .map((entry) => ({ ...entry, projection: projectRaycastObject(scene, entry.object, width, height) }))
+    .filter(({ projection }) => projection)
+    .sort((a, b) => b.projection.distance - a.projection.distance)
+    .forEach(({ color, scale, shape, projection }) => {
+      const column = Phaser.Math.Clamp(Math.floor((projection.x / width) * RAYCAST_COLUMNS), 0, RAYCAST_COLUMNS - 1);
+      if (projection.distance > (scene.raycastDepths[column] || Infinity)) return;
+
+      const size = Math.max(8, (height / projection.distance) * scale);
+      const x = projection.x;
+      const y = horizon + size * 0.12;
+      const g = scene.raycastGraphics;
+
+      g.fillStyle(0x000000, 0.35);
+      g.fillEllipse(x, y + size * 0.45, size * 0.72, size * 0.18);
+      g.fillStyle(color, 0.95);
+      if (shape === 'diamond' || shape === 'portal') {
+        g.fillTriangle(x, y - size * 0.5, x + size * 0.38, y, x, y + size * 0.5);
+        g.fillTriangle(x, y - size * 0.5, x - size * 0.38, y, x, y + size * 0.5);
+      } else if (shape === 'hazard') {
+        g.fillTriangle(x, y - size * 0.45, x + size * 0.45, y + size * 0.35, x - size * 0.45, y + size * 0.35);
+      } else {
+        g.fillRoundedRect(x - size * 0.32, y - size * 0.55, size * 0.64, size, Math.max(4, size * 0.12));
+      }
+    });
+}
+
+function projectRaycastObject(scene, object, width) {
+  const px = scene.player.x;
+  const py = scene.player.y;
+  const dx = object.x - px;
+  const dy = object.y - py;
+  const distance = Math.hypot(dx, dy) / TILE_SIZE;
+  if (distance < 0.2) return null;
+
+  const angle = Math.atan2(dy, dx);
+  const delta = angleDifference(angle, state.playerAngle);
+  if (Math.abs(delta) > RAYCAST_FOV * 0.62) return null;
+
+  return {
+    x: width / 2 + (delta / (RAYCAST_FOV / 2)) * (width / 2),
+    distance: distance * Math.cos(delta)
+  };
+}
+
+function normalizeAngle(angle) {
+  const twoPi = Math.PI * 2;
+  return ((angle % twoPi) + twoPi) % twoPi;
+}
+
+function angleDifference(a, b) {
+  return Math.atan2(Math.sin(a - b), Math.cos(a - b));
 }
 
 function updateSentries(scene, time) {
@@ -754,7 +941,12 @@ function refreshContinueButton() {
 
 function setTouchControlsVisible(visible) {
   window.touchDir = null;
+  window.touchState = { up: false, down: false, left: false, right: false };
   ui.touch.hidden = !visible;
+}
+
+function isTouchPressed(dir) {
+  return Boolean(window.touchState?.[dir] || window.touchDir === dir);
 }
 
 function getGameViewportInsets() {
@@ -901,9 +1093,12 @@ ui.touch.querySelectorAll('button').forEach((button) => {
   const dir = button.dataset.dir;
   const start = (event) => {
     event.preventDefault();
+    window.touchState = window.touchState || { up: false, down: false, left: false, right: false };
+    window.touchState[dir] = true;
     window.touchDir = dir;
   };
   const end = () => {
+    if (window.touchState) window.touchState[dir] = false;
     if (window.touchDir === dir) window.touchDir = null;
   };
   button.addEventListener('pointerdown', start);
