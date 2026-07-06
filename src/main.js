@@ -275,11 +275,30 @@ class GameScene extends Phaser.Scene {
       this.colliders.push(this.physics.add.overlap(this.player, sentry, () => damagePlayer(this, 14)));
     });
 
+    setTouchControlsVisible(hasTouchControls);
+    this.layoutCamera(level);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
-    this.cameras.main.setBounds(0, 0, level.width * TILE_SIZE, level.height * TILE_SIZE);
     this.physics.world.setBounds(0, 0, level.width * TILE_SIZE, level.height * TILE_SIZE);
     this.pausedByUi = false;
-    setTouchControlsVisible(hasTouchControls);
+  }
+
+  layoutCamera(level = levels[state.levelIndex]) {
+    if (!level) return;
+    const { top, bottom } = getGameViewportInsets();
+    const viewportWidth = this.scale.width;
+    const viewportHeight = Math.max(220, this.scale.height - top - bottom);
+    const worldWidth = level.width * TILE_SIZE;
+    const worldHeight = level.height * TILE_SIZE;
+    const offsetX = Math.max(0, (viewportWidth - worldWidth) / 2);
+    const offsetY = Math.max(0, (viewportHeight - worldHeight) / 2);
+
+    this.cameras.main.setViewport(0, top, viewportWidth, viewportHeight);
+    this.cameras.main.setBounds(
+      -offsetX,
+      -offsetY,
+      Math.max(worldWidth, viewportWidth),
+      Math.max(worldHeight, viewportHeight)
+    );
   }
 
   clearLevel() {
@@ -603,6 +622,14 @@ function setTouchControlsVisible(visible) {
   ui.touch.hidden = !visible;
 }
 
+function getGameViewportInsets() {
+  const hudBottom = ui.hud.hidden ? 0 : ui.hud.getBoundingClientRect().bottom;
+  const top = hudBottom ? Math.ceil(hudBottom + 18) : 0;
+  const touchHeight = ui.touch.hidden ? 0 : ui.touch.getBoundingClientRect().height;
+  const bottom = touchHeight ? Math.ceil(touchHeight + 32) : 24;
+  return { top, bottom };
+}
+
 function getGameScene() {
   try {
     return game.scene.getScene('GameScene');
@@ -738,5 +765,8 @@ ui.touch.querySelectorAll('button').forEach((button) => {
   button.addEventListener('pointercancel', end);
 });
 
-window.addEventListener('resize', () => game.scale.resize(window.innerWidth, window.innerHeight));
+window.addEventListener('resize', () => {
+  game.scale.resize(window.innerWidth, window.innerHeight);
+  getGameScene()?.layoutCamera();
+});
 refreshContinueButton();
