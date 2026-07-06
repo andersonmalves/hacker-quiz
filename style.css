@@ -1713,10 +1713,10 @@ body {
 .panel {
   position: fixed;
   z-index: 50;
-  left: clamp(16px, 5vw, 72px);
+  left: 50%;
   top: 50%;
   width: min(560px, calc(100vw - 32px));
-  transform: translateY(-50%);
+  transform: translate(-50%, -50%);
   padding: clamp(24px, 4vw, 44px);
   border: 1px solid rgba(0, 245, 255, 0.34);
   border-radius: 28px;
@@ -1873,9 +1873,7 @@ body {
 }
 
 .quiz-panel {
-  left: 50%;
   width: min(680px, calc(100vw - 32px));
-  transform: translate(-50%, -50%);
 }
 
 .quiz-options {
