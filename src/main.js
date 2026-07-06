@@ -136,6 +136,9 @@ const ui = {
   viewModeInputs: [...document.querySelectorAll('input[name="view-mode"]')]
 };
 
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const hasTouchControls = window.matchMedia('(hover: none), (pointer: coarse)').matches;
+
 const state = {
   levelIndex: 0,
   focus: 100,
@@ -150,9 +153,6 @@ const state = {
   playerAngle: 0,
   campaignStarted: false
 };
-
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const hasTouchControls = window.matchMedia('(hover: none), (pointer: coarse)').matches;
 
 function getInitialViewMode() {
   try {
