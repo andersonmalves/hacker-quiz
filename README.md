@@ -1,10 +1,10 @@
-# Hacker Quiz - Carreira de Engenharia de Software
+# Cyber Maze v2 - Escape da Internet
 
-Um jogo de quiz interativo com tema Anonymous/dark web para descobrir tudo sobre a profissão de Engenheiro de Software. Ideal para quem está fora da área e quer entender o que fazemos, quanto ganhamos e como é nosso dia a dia.
+Um jogo educativo em labirinto com quiz sobre a profissão de Engenheiro de Software. O jogador coleta fragmentos de conhecimento, evita distrações digitais e desbloqueia fases ao acertar perguntas.
 
 ![Tema](https://img.shields.io/badge/tema-hacker-darkgreen)
 ![Tecnologias](https://img.shields.io/badge/html-css-js-black)
-![Deploy](https://img.shields.io/badge/deploy-github%20pages-blue)
+![Deploy](https://img.shields.io/badge/deploy-vercel-black)
 
 ## Sobre o Quiz
 
@@ -19,14 +19,16 @@ Este quiz tem **30 perguntas** sobre a carreira de Engenharia de Software, cobri
 
 A cada partida, **10 perguntas são sorteadas** do pool de 30 com **equilíbrio por categoria** e **menos repetição** em relação à rodada anterior (até 8 perguntas da última partida são evitadas quando possível).
 
-## Como Jogar
+## Como Jogar a Campanha v2
 
-1. Acesse a URL do jogo publicada no GitHub Pages
-2. Clique em "INICIAR INVASAO" (a música ambiente inicia após o clique)
-3. Responda as 10 perguntas sorteadas sobre a carreira
-4. Veja o feedback com explicações educativas
-5. Use o botão 🔊/🔇 no canto superior direito para mutar/desmutar
-6. Salve sua pontuação no pódio local!
+1. Clique em "JOGAR".
+2. Use setas/WASD, swipe ou D-pad para explorar o labirinto.
+3. Colete os fragmentos azuis de cada fase para liberar o portal roxo.
+4. Evite riscos vermelhos e distrações, pois eles reduzem atenção e tempo.
+5. Ao chegar ao portal, responda corretamente ao quiz para desbloquear a próxima fase.
+6. Complete as 10 fases e salve sua pontuação no pódio local.
+
+O modo "Quiz Clássico" continua disponível para uma experiência direta sem labirinto.
 
 ### Sobre a Trilha Sonora Dark
 
@@ -60,44 +62,41 @@ Características:
 > Precisa de faculdade para ser Engenheiro de Software?  
 > ✓ Não - existem bootcamps, cursos e autodidatas
 
-## Deploy no GitHub Pages
+## Deploy na Vercel
 
-### Opção 1: Upload Manual
+Este projeto é uma aplicação estática em HTML, CSS e JavaScript vanilla. A Vercel publica direto da raiz do repositório.
 
-1. Crie um novo repositório público no GitHub
-2. Faça upload dos arquivos do jogo (`index.html`, `style.css`, `app.js`, `README.md`, `LICENSE`, `.nojekyll`)
-3. Vá em **Settings > Pages**
-4. Em "Source", selecione **Deploy from a branch**
-5. Selecione a branch `main` e pasta `/ (root)`
-6. Clique em **Save**
-7. Aguarde alguns minutos e acesse a URL: `https://seuusuario.github.io/nome-do-repo/`
+### Via Dashboard
 
-### Opção 2: Via Git CLI
+1. Importe o repositório na Vercel.
+2. Framework Preset: **Other**.
+3. Build Command: pode deixar vazio ou usar `npm run build`.
+4. Output Directory: deixe vazio, pois os arquivos estão na raiz.
+5. Deploy.
+
+### Via CLI
 
 ```bash
-# No diretório do projeto
-git init
-git add .
-git commit -m "Initial commit: Hacker Quiz - Carreira"
-git branch -M main
-git remote add origin https://github.com/SEU_USUARIO/hacker-quiz-carreira.git
-git push -u origin main
+npm run build
+npx vercel
 ```
-
-Depois configure o GitHub Pages (passos 3-7 da Opção 1).
 
 ## Estrutura de Arquivos
 
 Repositório **somente do jogo** (configuração do Cursor, se existir localmente, fica fora via `.gitignore`):
 
 ```
-hacker-quiz/
-├── index.html    # Interface com tema hacker
-├── style.css     # Estilos dark/neon
-├── app.js        # 30 perguntas + lógica de sorteio + pódio
-├── README.md     # Este arquivo
-├── LICENSE       # MIT
-└── .nojekyll     # Compatibilidade com GitHub Pages
+cyber-maze-v2/
+├── index.html           # Interface do jogo
+├── style.css            # Estilos dark/neon e responsividade
+├── app.js               # Quiz, campanha, pódio e orquestração
+├── maze/
+│   ├── engine.js        # Engine Canvas 2D com colisão, fragmentos e riscos
+│   ├── fases-config.js  # Fases, tilemaps e dificuldade
+│   └── dpad.js          # Controles touch
+├── package.json         # Scripts de validação e Vercel CLI
+├── vercel.json          # Configuração de deploy estático
+└── README.md
 ```
 
 ## Categorias das 30 Perguntas
@@ -136,7 +135,9 @@ O pool de **30 perguntas** é adequado para lançamento: cobre os 6 temas sem ex
 
 ## Funcionalidades
 
-- **30 perguntas no pool** - 10 sorteadas por partida com equilíbrio por categoria
+- **10 fases de campanha** com labirintos, fragmentos, distrações, riscos e portal bloqueado
+- **Desbloqueio por quiz** - cada fase só avança com resposta correta
+- **30 perguntas no pool** - 10 sorteadas por partida no Quiz Clássico com equilíbrio por categoria
 - **Pódio local** via LocalStorage (top 10 jogadores)
 - **100 pontos por acerto** com feedback educativo
 - **Trilha sonora dark/horror** gerada proceduralmente com 5 camadas: drone grave constante, batidas irregulares de coração/máquina, alertas tipo sirene, sombras tensas e glitches de corrupção (com botão de mute 🔊/🔇)

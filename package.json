@@ -1,0 +1,21 @@
+{
+  "name": "cyber-maze-v2",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Cyber Maze v2: labirinto educativo com quiz sobre Engenharia de Software.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

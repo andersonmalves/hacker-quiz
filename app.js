@@ -433,6 +433,8 @@ const campanhaEstado = {
     : 100,
   timerInterval: null,
   faseSpawn: { x: 0, y: 0 },
+  shardsColetados: 0,
+  shardsNecessarios: 0,
   voltarParaMaze: false,
   distractionIndex: 0,
   distractionTimeouts: [],
@@ -1223,11 +1225,13 @@ const elementos = {
   campanha: {
     briefingFaseNum: document.getElementById('briefing-fase-num'),
     briefingTimer: document.getElementById('briefing-timer'),
+    briefingShards: document.getElementById('briefing-shards'),
     briefingAtencaoFill: document.getElementById('briefing-atencao-fill'),
     briefingTitulo: document.getElementById('briefing-titulo'),
     briefingNarrativa: document.getElementById('briefing-narrativa'),
     mazeFaseNum: document.getElementById('maze-fase-num'),
     mazeTimer: document.getElementById('maze-timer'),
+    mazeShards: document.getElementById('maze-shards'),
     mazeTimerWrap: document.getElementById('maze-timer-wrap'),
     mazeAtencaoFill: document.getElementById('maze-atencao-fill'),
     mazeCanvas: document.getElementById('maze-canvas'),
@@ -1744,6 +1748,13 @@ const campaignManager = {
     if (elementos.campanha.mazeTimer) {
       elementos.campanha.mazeTimer.textContent = timerTexto;
     }
+    const shardsTexto = `${campanhaEstado.shardsColetados}/${campanhaEstado.shardsNecessarios}`;
+    if (elementos.campanha.briefingShards) {
+      elementos.campanha.briefingShards.textContent = shardsTexto;
+    }
+    if (elementos.campanha.mazeShards) {
+      elementos.campanha.mazeShards.textContent = shardsTexto;
+    }
 
     [elementos.campanha.briefingAtencaoFill, elementos.campanha.mazeAtencaoFill].forEach((el) => {
       if (!el) return;
@@ -1758,6 +1769,8 @@ const campaignManager = {
 
     campanhaEstado.modo = 'campanha';
     campanhaEstado.faseAtual = id;
+    campanhaEstado.shardsColetados = 0;
+    campanhaEstado.shardsNecessarios = fase.requiredShards || 0;
     campanhaEstado.distractionIndex = 0;
     campanhaEstado.timedDistractionsFired = new Set();
     campaignManager.limparDistractionsTimed();
@@ -1799,8 +1812,12 @@ const campaignManager = {
     preserveTriggers,
     fogOfWar: Boolean(fase.fogOfWar),
     moveCooldownMs: fase.moveCooldownMs ?? 0,
+    requiredShards: fase.requiredShards,
     onExit: () => campaignManager.onMazeExit(fase),
-    onDistraction: (pos) => campaignManager.onMazeDistraction(fase, pos)
+    onDistraction: (pos) => campaignManager.onMazeDistraction(fase, pos),
+    onShard: (info) => campaignManager.onMazeShard(info),
+    onHazard: () => campaignManager.onMazeHazard(),
+    onLockedExit: (info) => campaignManager.onLockedExit(info)
   }),
 
   limparDistractionsTimed: () => {
@@ -1827,6 +1844,7 @@ const campaignManager = {
 
   atualizarMazeHints: (fase) => {
     if (elementos.campanha.mazeHintFog) {
+      elementos.campanha.mazeHintFog.textContent = 'Visibilidade limitada — explore os corredores';
       elementos.campanha.mazeHintFog.hidden = !fase?.fogOfWar;
     }
   },
@@ -1846,6 +1864,8 @@ const campaignManager = {
     const spawnInfo = MazeEngine.start(campaignManager.buildMazeOptions(fase));
 
     campanhaEstado.faseSpawn = { x: spawnInfo.spawnX, y: spawnInfo.spawnY };
+    campanhaEstado.shardsColetados = 0;
+    campanhaEstado.shardsNecessarios = spawnInfo.shardsRequired || 0;
     campaignManager.bindMazeControls();
     campaignManager.agendarDistractionsTimed(fase);
     campaignManager.atualizarHud();
@@ -1864,6 +1884,12 @@ const campaignManager = {
         campaignManager.buildMazeOptions(fase, true)
       );
       campanhaEstado.faseSpawn = { x: spawnInfo.spawnX, y: spawnInfo.spawnY };
+      campanhaEstado.shardsColetados = 0;
+      campanhaEstado.shardsNecessarios = spawnInfo.shardsRequired || 0;
+    } else {
+      const objetivo = MazeEngine.getObjective();
+      campanhaEstado.shardsColetados = objetivo.collected;
+      campanhaEstado.shardsNecessarios = objetivo.required;
     }
 
     campaignManager.bindMazeControls();
@@ -1889,6 +1915,36 @@ const campaignManager = {
       campanhaEstado.distractionIndex += 1;
     }
     if (config) campaignManager.mostrarDistraction(config);
+  },
+
+  onMazeShard: (info) => {
+    campanhaEstado.shardsColetados = info.collected;
+    campanhaEstado.shardsNecessarios = info.required;
+    campanhaEstado.atencao = Math.min(100, campanhaEstado.atencao + 4);
+    campaignManager.atualizarHud();
+    sfxManager.playSelect();
+  },
+
+  onMazeHazard: () => {
+    campanhaEstado.atencao = Math.max(0, campanhaEstado.atencao - 16);
+    campanhaEstado.tempoRestante = Math.max(0, campanhaEstado.tempoRestante - 5);
+    campaignManager.atualizarHud();
+    screenFlash.trigger('erro');
+    sfxManager.playErro();
+    progressoCampanha.salvar();
+    if (campanhaEstado.tempoRestante <= 0) {
+      campaignManager.gameOverTrace();
+    }
+  },
+
+  onLockedExit: (info) => {
+    elementos.campanha.mazeHintFog.hidden = false;
+    elementos.campanha.mazeHintFog.textContent =
+      `Portal bloqueado — faltam ${Math.max(0, info.required - info.collected)} fragmentos azuis`;
+    sfxManager.playErro();
+    setTimeout(() => {
+      campaignManager.atualizarMazeHints(campanhaUtils.getFaseConfig(campanhaEstado.faseAtual));
+    }, 1800);
   },
 
   mostrarDistraction: (config) => {

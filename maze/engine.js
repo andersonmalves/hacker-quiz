@@ -1,6 +1,6 @@
-// Cyber Maze — engine mínima Canvas 2D + tilemap
+// Cyber Maze — engine Canvas 2D + tilemap
 (function () {
-  const TILE = { FLOOR: 0, WALL: 1, SPAWN: 2, EXIT: 3, DISTRACTION: 4 };
+  const TILE = { FLOOR: 0, WALL: 1, SPAWN: 2, EXIT: 3, DISTRACTION: 4, SHARD: 5, HAZARD: 6 };
 
   const COLORS = {
     wall: '#1a3a1a',
@@ -12,6 +12,11 @@
     player: '#00ff41',
     playerGlow: 'rgba(0, 255, 65, 0.5)',
     distraction: '#ffaa00',
+    warning: '#ffaa00',
+    shard: '#00d4ff',
+    shardGlow: 'rgba(0, 212, 255, 0.45)',
+    hazard: '#ff0040',
+    lockedExit: '#3a245c',
     fog: 'rgba(0, 0, 0, 0.85)'
   };
 
@@ -24,11 +29,15 @@
   let animId = null;
   let running = false;
   let triggeredDistractions = new Set();
+  let triggeredHazards = new Set();
   let callbacks = {};
   let keyHandler = null;
   let fogOfWar = false;
   let moveCooldownMs = 0;
   let lastMoveTime = 0;
+  let shardsCollected = 0;
+  let totalShards = 0;
+  let requiredShards = 0;
 
   const manhattan = (x1, y1, x2, y2) => Math.abs(x1 - x2) + Math.abs(y1 - y2);
 
@@ -55,6 +64,18 @@
     }
     return { x: 1, y: 1 };
   };
+
+  const countShards = () => {
+    let total = 0;
+    for (let y = 0; y < tilemap.rows; y++) {
+      for (let x = 0; x < tilemap.cols; x++) {
+        if (tilemap.grid[y][x] === TILE.SHARD) total += 1;
+      }
+    }
+    return total;
+  };
+
+  const exitIsUnlocked = () => shardsCollected >= requiredShards;
 
   const setPlayerTile = (x, y) => {
     player.x = x;
@@ -97,8 +118,12 @@
     ctx.fillRect(px, py, ts, ts);
 
     if (renderType === TILE.EXIT) {
-      ctx.fillStyle = COLORS.exit;
+      ctx.fillStyle = exitIsUnlocked() ? COLORS.exit : COLORS.lockedExit;
       ctx.fillRect(px + 6, py + 6, ts - 12, ts - 12);
+      if (!exitIsUnlocked()) {
+        ctx.strokeStyle = COLORS.warning;
+        ctx.strokeRect(px + 10, py + 10, ts - 20, ts - 20);
+      }
     }
 
     if (renderType === TILE.DISTRACTION) {
@@ -106,6 +131,32 @@
       ctx.beginPath();
       ctx.arc(px + ts / 2, py + ts / 2, 4, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    if (renderType === TILE.SHARD) {
+      ctx.shadowColor = COLORS.shardGlow;
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = COLORS.shard;
+      ctx.beginPath();
+      ctx.moveTo(px + ts / 2, py + 7);
+      ctx.lineTo(px + ts - 8, py + ts / 2);
+      ctx.lineTo(px + ts / 2, py + ts - 7);
+      ctx.lineTo(px + 8, py + ts / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    if (renderType === TILE.HAZARD) {
+      ctx.fillStyle = 'rgba(255, 0, 64, 0.18)';
+      ctx.fillRect(px, py, ts, ts);
+      ctx.strokeStyle = COLORS.hazard;
+      ctx.beginPath();
+      ctx.moveTo(px + 8, py + 8);
+      ctx.lineTo(px + ts - 8, py + ts - 8);
+      ctx.moveTo(px + ts - 8, py + 8);
+      ctx.lineTo(px + 8, py + ts - 8);
+      ctx.stroke();
     }
   };
 
@@ -150,7 +201,26 @@
       if (callbacks.onDistraction) callbacks.onDistraction({ x, y });
     }
 
+    if (type === TILE.SHARD) {
+      shardsCollected += 1;
+      tilemap.grid[y][x] = TILE.FLOOR;
+      if (callbacks.onShard) {
+        callbacks.onShard({ x, y, collected: shardsCollected, total: totalShards, required: requiredShards });
+      }
+    }
+
+    if (type === TILE.HAZARD && !triggeredHazards.has(key)) {
+      triggeredHazards.add(key);
+      if (callbacks.onHazard) callbacks.onHazard({ x, y });
+    }
+
     if (type === TILE.EXIT && callbacks.onExit) {
+      if (!exitIsUnlocked()) {
+        if (callbacks.onLockedExit) {
+          callbacks.onLockedExit({ collected: shardsCollected, total: totalShards, required: requiredShards });
+        }
+        return;
+      }
       running = false;
       callbacks.onExit();
     }
@@ -209,11 +279,23 @@
       lastMoveTime = 0;
       callbacks = {
         onExit: options.onExit || null,
-        onDistraction: options.onDistraction || null
+        onDistraction: options.onDistraction || null,
+        onShard: options.onShard || null,
+        onHazard: options.onHazard || null,
+        onLockedExit: options.onLockedExit || null
       };
       if (!options.preserveTriggers) {
         triggeredDistractions = new Set();
+        triggeredHazards = new Set();
       }
+
+      tilemap = {
+        ...tilemap,
+        grid: tilemap.grid.map((row) => [...row])
+      };
+      totalShards = countShards();
+      requiredShards = Math.min(totalShards, Math.max(0, Number(options.requiredShards) || totalShards));
+      shardsCollected = 0;
 
       canvas.width = tilemap.cols * tilemap.tileSize;
       canvas.height = tilemap.rows * tilemap.tileSize;
@@ -223,7 +305,7 @@
       running = true;
       bindKeys();
       loop();
-      return { spawnX: spawn.x, spawnY: spawn.y };
+      return { spawnX: spawn.x, spawnY: spawn.y, shardsTotal: totalShards, shardsRequired: requiredShards };
     },
 
     stop() {
@@ -263,6 +345,10 @@
 
     getSpawn() {
       return findSpawn();
+    },
+
+    getObjective() {
+      return { collected: shardsCollected, total: totalShards, required: requiredShards };
     },
 
     isRunning() {

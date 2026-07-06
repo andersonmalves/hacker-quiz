@@ -1,5 +1,5 @@
 // Cyber Maze — configuração de campanha e tilemap base
-// 0=chão  1=parede  2=spawn  3=saída  4=distração
+// 0=chão  1=parede  2=spawn  3=saída  4=distração  5=fragmento  6=risco
 
 const FEATURES = {
   modoCampanha: true,
@@ -8,7 +8,7 @@ const FEATURES = {
 
 const CAMPANHA_CONFIG = {
   storageKey: 'cyberMazeProgresso',
-  progressoVersao: 3,
+  progressoVersao: 4,
   tempoInicialSegundos: 900,
   penalidadeErroSegundos: 15,
   atencaoInicial: 100,
@@ -24,13 +24,13 @@ const BASE_TILEMAP = {
   tileSize: 32,
   grid: [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 2, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 4, 1],
+    [1, 2, 5, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 4, 1],
     [1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1],
     [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1],
     [1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 5, 0, 0, 0, 0, 1, 0, 6, 0, 1],
     [1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-    [1, 4, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+    [1, 4, 0, 5, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
     [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
     [1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 3, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
@@ -55,15 +55,15 @@ const BASE_TILEMAP_FIREWALL = {
   tileSize: 32,
   grid: [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 2, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 4, 1],
+    [1, 2, 5, 0, 0, 1, 1, 1, 0, 0, 5, 0, 0, 4, 1],
     [1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1],
     [1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1],
     [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1],
-    [1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 4, 0, 0, 0, 0, 5, 0, 0, 0, 0, 6, 0, 0, 1],
     [1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 4, 1],
     [1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 1],
+    [1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 1, 0, 0, 3, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ]
 };
@@ -75,14 +75,14 @@ const BASE_TILEMAP_DATABASE = {
   tileSize: 32,
   grid: [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 2, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 4, 1],
+    [1, 2, 5, 1, 0, 1, 0, 0, 1, 0, 1, 0, 5, 4, 1],
     [1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1],
     [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1],
     [1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1],
-    [1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0, 0, 1],
     [1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1],
     [1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 1],
-    [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1],
+    [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 6, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ]
@@ -95,15 +95,15 @@ const BASE_TILEMAP_SERVER = {
   tileSize: 32,
   grid: [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 2, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 4, 1],
+    [1, 2, 5, 0, 1, 0, 0, 5, 0, 1, 0, 0, 0, 4, 1],
     [1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1],
     [1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 1],
     [1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 5, 0, 1],
     [1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
     [1, 4, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
     [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1],
-    [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3, 1],
+    [1, 0, 0, 0, 6, 0, 1, 0, 0, 0, 1, 0, 0, 3, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ]
 };
@@ -116,15 +116,15 @@ const BASE_TILEMAP_TWIST = {
   tileSize: 32,
   grid: [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 2, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 1],
+    [1, 2, 5, 0, 1, 0, 0, 5, 1, 0, 0, 0, 1, 4, 1],
     [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
     [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
     [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-    [1, 0, 0, 4, 0, 0, 4, 0, 0, 0, 0, 4, 0, 0, 1],
+    [1, 0, 0, 4, 0, 0, 4, 6, 0, 0, 0, 4, 5, 0, 1],
     [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
     [1, 4, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
     [1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-    [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3, 1],
+    [1, 0, 0, 1, 6, 0, 1, 0, 0, 0, 1, 0, 0, 3, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
   ]
 };
@@ -135,13 +135,13 @@ const BASE_TILEMAP_FINAL = {
   tileSize: 32,
   grid: [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 2, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+    [1, 2, 5, 0, 0, 1, 0, 0, 5, 0, 1, 0, 0, 0, 1],
     [1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 4, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 6, 1, 0, 0, 5, 1, 0, 1],
     [1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
     [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-    [1, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 4, 0, 0, 0, 1, 0, 6, 0, 0, 0, 1],
     [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
     [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 3, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
@@ -172,6 +172,7 @@ const FASES_CAMPANHA = [
     tilemapRef: 'base',
     perguntaId: 1,
     jogavel: true,
+    requiredShards: 2,
     fogOfWar: true,
     moveCooldownMs: 80,
     distractions: [
@@ -186,6 +187,7 @@ const FASES_CAMPANHA = [
     tilemapRef: 'base-firewall',
     perguntaId: 4,
     jogavel: true,
+    requiredShards: 2,
     fogOfWar: true,
     moveCooldownMs: 100,
     distractionsTimed: [
@@ -208,6 +210,7 @@ const FASES_CAMPANHA = [
     tilemapRef: 'base-database',
     perguntaId: 26,
     jogavel: true,
+    requiredShards: 3,
     fogOfWar: true,
     moveCooldownMs: 100,
     distractionsTimed: [
@@ -231,6 +234,7 @@ const FASES_CAMPANHA = [
     tilemapRef: 'base-mirror',
     perguntaId: 28,
     jogavel: true,
+    requiredShards: 2,
     fogOfWar: true,
     moveCooldownMs: 120,
     distractionsTimed: [
@@ -263,6 +267,7 @@ const FASES_CAMPANHA = [
     tilemapRef: 'base-server',
     perguntaId: 7,
     jogavel: true,
+    requiredShards: 3,
     fogOfWar: true,
     moveCooldownMs: 110,
     distractionsTimed: [
@@ -285,6 +290,7 @@ const FASES_CAMPANHA = [
     tilemapRef: 'base-twist',
     perguntaId: 3,
     jogavel: true,
+    requiredShards: 3,
     fogOfWar: true,
     moveCooldownMs: 120,
     distractionsTimed: [
@@ -317,10 +323,31 @@ const FASES_CAMPANHA = [
     id: 7,
     titulo: 'Vício em Scroll',
     narrativa: 'O feed infinito puxa você para baixo. Resista e responda.',
+    tilemapRef: 'base-database',
     perguntaId: 18,
-    jogavel: false,
-    cutscene: 'scroll',
-    distractions: []
+    jogavel: true,
+    requiredShards: 3,
+    fogOfWar: true,
+    moveCooldownMs: 130,
+    distractionsTimed: [
+      {
+        delaySegundos: 7,
+        tipo: 'notification',
+        titulo: 'Feed infinito carregando mais vídeos…',
+        atencaoDelta: 14
+      },
+      {
+        delaySegundos: 17,
+        tipo: 'popup',
+        titulo: 'Só mais um vídeo antes de sair?',
+        atencaoDelta: 15
+      }
+    ],
+    distractions: [
+      { tipo: 'notification', titulo: 'Novo reel recomendado', atencaoDelta: 13, triggerTile: { x: 13, y: 1 } },
+      { tipo: 'popup', titulo: 'Você recebeu 9 curtidas', atencaoDelta: 13, triggerTile: { x: 1, y: 5 } },
+      { tipo: 'notification', titulo: 'Rolagem automática ativada', atencaoDelta: 14, triggerTile: { x: 13, y: 7 } }
+    ]
   },
   {
     id: 8,
@@ -329,6 +356,7 @@ const FASES_CAMPANHA = [
     tilemapRef: 'base-twist-mirror',
     perguntaId: 5,
     jogavel: true,
+    requiredShards: 3,
     mazeEffect: 'glitch',
     fogOfWar: true,
     moveCooldownMs: 120,
@@ -368,6 +396,7 @@ const FASES_CAMPANHA = [
     tilemapRef: 'base-server-mirror',
     perguntaId: 29,
     jogavel: true,
+    requiredShards: 3,
     fogOfWar: true,
     moveCooldownMs: 130,
     distractionsTimed: [
@@ -400,6 +429,7 @@ const FASES_CAMPANHA = [
     tilemapRef: 'base-final',
     perguntaId: 12,
     jogavel: true,
+    requiredShards: 3,
     fogOfWar: true,
     moveCooldownMs: 120,
     distractionsTimed: [

@@ -6,6 +6,11 @@ AGENTS.md
 .DS_Store
 Thumbs.db
 
+# Dependências e build
+node_modules/
+dist/
+.vercel/
+
 # Editores
 .idea/
 .vscode/
