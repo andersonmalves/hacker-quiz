@@ -1,8 +1,13 @@
 import Phaser from 'phaser';
 
-const STORAGE_KEY = 'cyberMazeV2Progress';
-const VIEW_MODE_KEY = 'cyberMazeViewMode';
-const MUTE_KEY = 'cyberMazeMute';
+const STORAGE_PREFIX = 'cyberMazeV2';
+const STORAGE_KEY = `${STORAGE_PREFIX}Progress`;
+const VIEW_MODE_KEY = `${STORAGE_PREFIX}ViewMode`;
+const MUTE_KEY = `${STORAGE_PREFIX}Mute`;
+const LEGACY_STORAGE_MIGRATIONS = [
+  ['cyberMazeViewMode', VIEW_MODE_KEY],
+  ['cyberMazeMute', MUTE_KEY]
+];
 const BGM_PATH = '/audio/bgm-gameplay.ogg';
 const BGM_VOLUME = 0.35;
 const BGM_DUCKED_VOLUME = 0.12;
@@ -131,13 +136,72 @@ const ui = {
   quizFeedback: document.getElementById('quiz-feedback'),
   playAgain: document.getElementById('play-again'),
   touch: document.getElementById('touch-controls'),
+  touchButtons: [...document.querySelectorAll('#touch-controls button[data-dir]')],
   soundToggle: document.getElementById('sound-toggle'),
   viewToggle: document.getElementById('view-toggle'),
   viewModeInputs: [...document.querySelectorAll('input[name="view-mode"]')]
 };
 
+const TOUCH_CONTROL_LABELS = {
+  '2d': {
+    up: '▲', down: '▼', left: '◀', right: '▶',
+    aria: {
+      up: 'Mover para cima',
+      down: 'Mover para baixo',
+      left: 'Mover para esquerda',
+      right: 'Mover para direita'
+    }
+  },
+  '3d': {
+    up: '▲', down: '▼', left: '↺', right: '↻',
+    aria: {
+      up: 'Avançar',
+      down: 'Recuar',
+      left: 'Girar à esquerda',
+      right: 'Girar à direita'
+    }
+  }
+};
+
+let onQuizKeydown = null;
+
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const hasTouchControls = window.matchMedia('(hover: none), (pointer: coarse)').matches;
+
+const safeStorage = {
+  get(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // O jogo continua sem persistência quando o navegador bloqueia storage.
+    }
+  },
+  remove(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Sem ação necessária.
+    }
+  }
+};
+
+function migrateStorageKeys() {
+  LEGACY_STORAGE_MIGRATIONS.forEach(([legacyKey, nextKey]) => {
+    const legacyValue = safeStorage.get(legacyKey);
+    if (legacyValue === null || safeStorage.get(nextKey) !== null) return;
+    safeStorage.set(nextKey, legacyValue);
+    safeStorage.remove(legacyKey);
+  });
+}
+
+migrateStorageKeys();
 
 const state = {
   levelIndex: 0,
@@ -155,29 +219,17 @@ const state = {
 };
 
 function getInitialViewMode() {
-  try {
-    return localStorage.getItem(VIEW_MODE_KEY) === '3d' ? '3d' : '2d';
-  } catch {
-    return '2d';
-  }
+  return safeStorage.get(VIEW_MODE_KEY) === '3d' ? '3d' : '2d';
 }
 
 function getInitialMuted() {
-  try {
-    const stored = localStorage.getItem(MUTE_KEY);
-    if (stored !== null) return stored === 'true';
-  } catch {
-    return reducedMotion;
-  }
+  const stored = safeStorage.get(MUTE_KEY);
+  if (stored !== null) return stored === 'true';
   return reducedMotion;
 }
 
 function persistMuted(muted) {
-  try {
-    localStorage.setItem(MUTE_KEY, String(muted));
-  } catch {
-    // localStorage indisponível — segue sem persistir
-  }
+  safeStorage.set(MUTE_KEY, String(muted));
 }
 
 class GameAudio {
@@ -285,7 +337,8 @@ class GameScene extends Phaser.Scene {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('W,A,S,D');
     this.events.on('wake', () => {
-      if (state.campaignStarted) this.startLevel(state.levelIndex);
+      if (!state.campaignStarted || !ui.menu.hidden) return;
+      this.startLevel(state.levelIndex);
     });
     this.pausedByUi = true;
     showMenu();
@@ -520,11 +573,30 @@ function makeExit(scene, exit) {
   return portal;
 }
 
+function preparePlacementCells(maze, required) {
+  const filters = [
+    (cell) => distance(cell, maze.start) > 5 && distance(cell, maze.exit) > 2,
+    (cell) => distance(cell, maze.start) > 3 && distance(cell, maze.exit) > 1,
+    (cell) => !(cell.x === maze.start.x && cell.y === maze.start.y)
+      && !(cell.x === maze.exit.x && cell.y === maze.exit.y)
+  ];
+  for (const filter of filters) {
+    const cells = shuffle(openCells(maze.grid).filter(filter), seeded(state.levelIndex + 101));
+    if (cells.length >= required) return cells;
+  }
+  return shuffle(openCells(maze.grid), seeded(state.levelIndex + 101));
+}
+
+function takePlacementCell(cells) {
+  return cells.length > 0 ? cells.pop() : null;
+}
+
 function placeObjects(scene, maze, level) {
-  const cells = openCells(maze.grid).filter((cell) => distance(cell, maze.start) > 5 && distance(cell, maze.exit) > 2);
-  shuffle(cells, seeded(state.levelIndex + 101));
+  const required = level.shards + level.hazards + level.sentries;
+  const cells = preparePlacementCells(maze, required);
   for (let i = 0; i < level.shards; i += 1) {
-    const cell = cells.pop();
+    const cell = takePlacementCell(cells);
+    if (!cell) break;
     const shardKey = cellKey(cell);
     if (state.collectedShards.has(shardKey)) continue;
     const shard = is3dMode()
@@ -540,7 +612,8 @@ function placeObjects(scene, maze, level) {
     scene.shardGroup.add(shard);
   }
   for (let i = 0; i < level.hazards; i += 1) {
-    const cell = cells.pop();
+    const cell = takePlacementCell(cells);
+    if (!cell) break;
     const hazard = is3dMode()
       ? scene.add.polygon(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 18, [0, -13, 13, 0, 0, 13, -13, 0], 0xff2d55, 0.44)
       : scene.add.rectangle(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 16, 24, 24, 0xff2d55, 0.38);
@@ -550,7 +623,8 @@ function placeObjects(scene, maze, level) {
     scene.hazards.add(hazard);
   }
   for (let i = 0; i < level.sentries; i += 1) {
-    const cell = cells.pop();
+    const cell = takePlacementCell(cells);
+    if (!cell) break;
     const sentry = is3dMode()
       ? scene.add.polygon(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 13, [0, -12, 12, -4, 12, 12, -12, 12, -12, -4], 0xff4fd8, 1)
       : scene.add.rectangle(cell.x * TILE_SIZE + 16, cell.y * TILE_SIZE + 16, 20, 20, 0xff4fd8, 1);
@@ -579,6 +653,7 @@ function setViewMode(mode, shouldRefresh = true) {
     input.checked = input.value === state.viewMode;
   });
   updateViewToggleVisibility();
+  updateTouchControlLabels();
 
   if (!shouldRefresh) return;
   const scene = getGameScene();
@@ -902,7 +977,9 @@ function showMenu() {
     scene.pausedByUi = true;
     scene.player?.body?.setVelocity(0, 0);
   }
+  unbindQuizKeyboard();
   audio.setDucked(false);
+  state.campaignStarted = false;
   ui.menu.hidden = false;
   ui.hud.hidden = true;
   ui.briefing.hidden = true;
@@ -941,11 +1018,32 @@ function showQuiz(scene) {
   question.options.forEach((option, index) => {
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = option;
+    button.textContent = `${index + 1}. ${option}`;
     button.addEventListener('click', () => answerQuiz(scene, index));
     ui.quizOptions.appendChild(button);
   });
+  bindQuizKeyboard(scene);
   ui.quizOptions.querySelector('button')?.focus();
+}
+
+function bindQuizKeyboard(scene) {
+  unbindQuizKeyboard();
+  onQuizKeydown = (event) => {
+    if (state.quizAnswered || ui.quiz.hidden) return;
+    const index = { 1: 0, 2: 1, 3: 2, 4: 3 }[Number(event.key)];
+    if (index === undefined) return;
+    const buttons = ui.quizOptions.querySelectorAll('button');
+    if (index >= buttons.length) return;
+    event.preventDefault();
+    answerQuiz(scene, index);
+  };
+  document.addEventListener('keydown', onQuizKeydown);
+}
+
+function unbindQuizKeyboard() {
+  if (!onQuizKeydown) return;
+  document.removeEventListener('keydown', onQuizKeydown);
+  onQuizKeydown = null;
 }
 
 function answerQuiz(scene, index) {
@@ -963,6 +1061,7 @@ function answerQuiz(scene, index) {
     updateHud();
     setTimeout(() => {
       ui.quiz.hidden = true;
+      unbindQuizKeyboard();
       audio.setDucked(false);
       state.awaitingQuiz = false;
       state.quizAnswered = false;
@@ -977,6 +1076,7 @@ function answerQuiz(scene, index) {
   updateHud();
   setTimeout(() => {
     ui.quiz.hidden = true;
+    unbindQuizKeyboard();
     audio.setDucked(false);
     state.awaitingQuiz = false;
     state.quizAnswered = false;
@@ -986,6 +1086,7 @@ function answerQuiz(scene, index) {
 }
 
 function showEnding(scene) {
+  unbindQuizKeyboard();
   scene.pausedByUi = true;
   scene.clearLevel();
   ui.hud.hidden = true;
@@ -1030,6 +1131,16 @@ function setTouchControlsVisible(visible) {
   window.touchDir = null;
   window.touchState = { up: false, down: false, left: false, right: false };
   ui.touch.hidden = !visible;
+  if (visible) updateTouchControlLabels();
+}
+
+function updateTouchControlLabels() {
+  const labels = TOUCH_CONTROL_LABELS[is3dMode() ? '3d' : '2d'];
+  ui.touchButtons.forEach((button) => {
+    const dir = button.dataset.dir;
+    button.textContent = labels[dir];
+    button.setAttribute('aria-label', labels.aria[dir]);
+  });
 }
 
 function isTouchPressed(dir) {
@@ -1051,30 +1162,6 @@ function getGameScene() {
     return null;
   }
 }
-
-const safeStorage = {
-  get(key) {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  set(key, value) {
-    try {
-      localStorage.setItem(key, value);
-    } catch {
-      // O jogo continua sem persistência quando o navegador bloqueia storage.
-    }
-  },
-  remove(key) {
-    try {
-      localStorage.removeItem(key);
-    } catch {
-      // Sem ação necessária.
-    }
-  }
-};
 
 function openCells(grid) {
   const cells = [];
@@ -1153,12 +1240,13 @@ ui.briefingAction.addEventListener('click', async () => {
   game.scene.getScene('GameScene').launchLevel();
 });
 
-ui.playAgain.addEventListener('click', () => {
+ui.playAgain.addEventListener('click', async () => {
   state.campaignStarted = true;
   state.levelIndex = 0;
   state.score = 0;
   state.focus = 100;
   ui.ending.hidden = true;
+  await audio.start();
   game.scene.getScene('GameScene').startLevel(0);
 });
 

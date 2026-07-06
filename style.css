@@ -1968,6 +1968,13 @@ body {
   transform: translateY(1px) scale(0.98);
 }
 
+.quiz-keyboard-hint {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: rgba(234, 252, 255, 0.62);
+  letter-spacing: 0.04em;
+}
+
 .quiz-feedback {
   min-height: 1.6em;
   margin-top: 18px;
