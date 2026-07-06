@@ -143,7 +143,8 @@ const state = {
   muted: false,
   viewMode: getInitialViewMode(),
   collectedShards: new Set(),
-  playerAngle: 0
+  playerAngle: 0,
+  campaignStarted: false
 };
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -254,8 +255,11 @@ class GameScene extends Phaser.Scene {
     });
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('W,A,S,D');
-    this.events.on('wake', () => this.startLevel(state.levelIndex));
-    this.startLevel(state.levelIndex);
+    this.events.on('wake', () => {
+      if (state.campaignStarted) this.startLevel(state.levelIndex);
+    });
+    this.pausedByUi = true;
+    showMenu();
   }
 
   startLevel(index) {
@@ -1040,6 +1044,7 @@ const game = new Phaser.Game({
 });
 
 ui.start.addEventListener('click', async () => {
+  state.campaignStarted = true;
   state.levelIndex = 0;
   state.score = 0;
   state.focus = 100;
@@ -1048,6 +1053,7 @@ ui.start.addEventListener('click', async () => {
 });
 
 ui.continue.addEventListener('click', async () => {
+  state.campaignStarted = true;
   loadProgress();
   await audio.start();
   game.scene.getScene('GameScene').startLevel(state.levelIndex);
@@ -1065,6 +1071,7 @@ ui.briefingAction.addEventListener('click', async () => {
 });
 
 ui.playAgain.addEventListener('click', () => {
+  state.campaignStarted = true;
   state.levelIndex = 0;
   state.score = 0;
   state.focus = 100;

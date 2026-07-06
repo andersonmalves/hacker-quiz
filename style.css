@@ -1791,7 +1791,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 32px;
+  margin-top: 18px;
 }
 
 .primary-action,
@@ -1827,7 +1827,7 @@ body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 22px;
+  margin-top: 28px;
   padding: 0;
   border: 0;
 }
@@ -2045,30 +2045,79 @@ body[data-view-mode='3d'] #game-root canvas {
   .panel {
     left: 12px;
     top: auto;
-    bottom: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
     width: calc(100vw - 24px);
-    max-height: calc(100vh - 110px);
+    max-height: min(88vh, calc(100dvh - env(safe-area-inset-top) - 24px));
     overflow: auto;
     transform: none;
     border-radius: 22px;
+    padding: 20px 18px 22px;
   }
 
   .hero-panel h1,
   .panel h2 {
-    font-size: clamp(2.1rem, 13vw, 4rem);
+    font-size: clamp(1.85rem, 10vw, 3.2rem);
+    line-height: 0.95;
+  }
+
+  .hero-copy,
+  .briefing-panel p:not(.eyebrow),
+  .ending-panel p:not(.eyebrow) {
+    margin-top: 14px;
+    font-size: 0.94rem;
+    line-height: 1.55;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    margin-top: 16px;
+  }
+
+  .primary-action,
+  .secondary-action {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .view-mode-picker {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .view-mode-picker label {
+    min-height: 52px;
+    padding: 8px 6px;
+    font-size: 0.72rem;
+    text-align: center;
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  .feature-grid span {
+    min-height: 40px;
+    padding: 10px;
+    font-size: 0.68rem;
+    text-align: center;
   }
 
   .hud {
     grid-template-columns: repeat(2, 1fr);
-    top: 12px;
+    top: max(12px, env(safe-area-inset-top));
+    width: calc(100vw - 20px);
+    gap: 6px;
   }
 
-  .feature-grid {
-    grid-template-columns: 1fr;
+  .hud div {
+    padding: 10px 12px;
   }
 
-  .view-mode-picker {
-    grid-template-columns: 1fr;
+  .hud strong {
+    font-size: 0.95rem;
   }
 
   .touch-controls {
@@ -2078,13 +2127,19 @@ body[data-view-mode='3d'] #game-root canvas {
   }
 
   .sound-toggle {
-    top: auto;
-    bottom: 184px;
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    bottom: auto;
+    min-height: 38px;
+    font-size: 0.68rem;
   }
 
   .view-toggle {
-    top: auto;
-    bottom: 236px;
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    bottom: auto;
+    min-height: 38px;
+    font-size: 0.68rem;
   }
 
   body[data-view-mode='3d'] #game-root canvas {
